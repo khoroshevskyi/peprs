@@ -1,4 +1,3 @@
-use std::fmt::Display;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
@@ -11,8 +10,8 @@ use crate::error::Error;
 
 pub struct Project {
     pub config: Option<ProjectConfig>,
-    pub samples: Option<DataFrame>,
-    pub subsamples: Option<Vec<DataFrame>>,
+    pub samples: Option<LazyFrame>,
+    pub subsamples: Option<Vec<LazyFrame>>,
 }
 
 impl Project {
@@ -29,7 +28,9 @@ impl Project {
             LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
                 .with_has_header(true)
                 .finish()?
-                .collect()?,
+                // TODO
+                // handle duplicate rows, with the same `sample_name`
+                // other attributes becoming lists
         );
 
         Ok(Self {
@@ -46,20 +47,25 @@ impl Project {
     where
         P: AsRef<Path>,
     {
+        // open configuration file and deserialize from yaml to struct
         let config_file = File::open(&path)?;
         let reader = BufReader::new(config_file);
         let config: ProjectConfig = serde_yaml::from_reader(reader)?;
 
+        // exrtract out the directory of the config file
         let config_dir = path.as_ref().parent().unwrap_or(Path::new("."));
 
         // read in the sample table if it exists
-        let samples = match &config.sample_table {
+        // if the user has specified a sample table, read it in
+        // assuming its in the same directory as the project config file.
+        let mut samples_lf = match &config.sample_table {
             Some(sample_table) => {
                 let sample_table_path = config_dir.join(sample_table);
                 Some(
                     LazyCsvReader::new(PlPath::new(sample_table_path.to_str().unwrap()))
                         .with_has_header(true)
                         .finish()?
+                        // TODO: merge duplicate sample names
                 )
             }
             None => None,
@@ -71,35 +77,29 @@ impl Project {
             None => None,
         };
 
-        // TODO: implement logic for any remove, etc
-        let samples = match (samples, &config.sample_modifiers) {
-            (Some(mut samples_lazy), Some(modifiers)) => {
+        // apply modifiers if they exist and if there is a sample table
+        #[allow(clippy::collapsible_if)]
+        if let Some(modifiers) = &config.sample_modifiers {
+
+            // make sure they passed a sample table at all
+            if let Some(lf) = samples_lf.take() {
+                let mut new_lf = lf;
+
+                // REMOVE modifier
                 if let Some(cols_to_remove) = &modifiers.remove {
-                    samples_lazy = samples_lazy.drop(cols(cols_to_remove.clone()));
+                    new_lf = new_lf.drop(cols(cols_to_remove));
                 }
-                Some(samples_lazy.collect()?)
+
+                // after all potential modifications, re-assign
+                samples_lf = Some(new_lf)
             }
-            (Some(samples_lazy), None) => {
-                Some(samples_lazy.collect()?)
-            }
-            (None, _) => None,
-        };
+        }
 
          Ok(Self {
             config: Some(config),
-            samples,
+            samples: samples_lf,
             subsamples,
         })
-    }
-}
-
-impl Display for Project {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(samples) = &self.samples {
-            samples.fmt(f)
-        } else {
-            Ok(())
-        }
     }
 }
 
@@ -141,6 +141,5 @@ mod tests {
     fn remove_pep_project(remove_pep: &'static str) {
         let proj = Project::from_config(remove_pep);
         assert_eq!(proj.is_ok(), true);
-        println!("{}", proj.unwrap())
     }
 }
