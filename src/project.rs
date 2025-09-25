@@ -16,6 +16,9 @@ pub struct Project {
 }
 
 impl Project {
+    ///
+    /// Create a new PEP project struct from a simple csv alone (no modifiers)
+    /// 
     pub fn from_csv<P>(path: P) -> Result<Self, Error>
     where
         P: AsRef<Path>,
@@ -35,6 +38,10 @@ impl Project {
             subsamples,
         })
     }
+
+    ///
+    /// Create a new PEP project struct from a project configuration file
+    /// 
     pub fn from_config<P>(path: P) -> Result<Self, Error>
     where
         P: AsRef<Path>,
