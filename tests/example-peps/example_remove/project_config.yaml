@@ -3,10 +3,5 @@ sample_table: sample_table.csv
 output_dir: $HOME/hello_looper_results
 
 sample_modifiers:
-  derive:
-    attributes: [file_path]
-    sources:
-      source1: /data/lab/project/{organism}_{time}h.fastq
-      source2: /path/from/collaborator/weirdNamingScheme_{external_id}.fastq
   remove:
     - protocol
