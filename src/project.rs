@@ -8,22 +8,23 @@ use crate::error::Error;
 pub struct Project {
     pub config: Option<ProjectConfig>,
     pub samples: DataFrame,
-    pub subsamples: Option<Vec<DataFrame>>
+    pub subsamples: Option<Vec<DataFrame>>,
 }
 
 impl Project {
-    pub fn from_csv<P>(path: P) -> Result<Self, Error> 
-    where P: AsRef<Path>
+    pub fn from_csv<P>(path: P) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
     {
         let df = LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
             .with_has_header(true)
             .finish()?
             .collect()?;
-        
+
         Ok(Self {
             config: None,
             samples: df,
-            subsamples: None
+            subsamples: None,
         })
     }
 }
@@ -39,7 +40,6 @@ mod tests {
     fn basic_csv() -> &'static str {
         "tests/data/basic.csv"
     }
-
 
     #[rstest]
     fn pep_from_csv(basic_csv: &'static str) {
