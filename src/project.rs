@@ -65,15 +65,17 @@ impl Project {
         };
 
         // TODO: implement logic for any remove, etc
-        let samples = if let (Some(mut samples_lazy), Some(modifiers)) = (samples, &config.sample_modifiers) {
-            if let Some(cols_to_remove) = &modifiers.remove {
-                samples_lazy = samples_lazy.drop(cols(cols_to_remove.clone()));
+        let samples = match (samples, &config.sample_modifiers) {
+            (Some(mut samples_lazy), Some(modifiers)) => {
+                if let Some(cols_to_remove) = &modifiers.remove {
+                    samples_lazy = samples_lazy.drop(cols(cols_to_remove.clone()));
+                }
+                Some(samples_lazy.collect()?)
             }
-            Some(samples_lazy.collect()?)
-        } else if let Some(samples_lazy) = samples {
-            Some(samples_lazy.collect()?)
-        } else {
-            None
+            (Some(samples_lazy), None) => {
+                Some(samples_lazy.collect()?)
+            }
+            (None, _) => None,
         };
 
          Ok(Self {
@@ -111,6 +113,11 @@ mod tests {
         "tests/example-peps/example_basic/project_config.yaml"
     }
 
+    #[fixture]
+    fn remove_pep() -> &'static str {
+        "tests/example-peps/example_basic/project_config.yaml"
+    }
+
     #[rstest]
     fn pep_from_csv(basic_csv: &'static str) {
         let proj = Project::from_csv(basic_csv);
@@ -121,5 +128,12 @@ mod tests {
     fn basic_pep_project(basic_pep: &'static str) {
         let proj = Project::from_config(basic_pep);
         assert_eq!(proj.is_ok(), true);
+    }
+
+    #[rstest]
+    fn remove_pep_project(remove_pep: &'static str) {
+        let proj = Project::from_config(remove_pep);
+        assert_eq!(proj.is_ok(), true);
+        println!("{}", proj.unwrap())
     }
 }
