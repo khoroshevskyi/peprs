@@ -119,7 +119,7 @@ mod tests {
 
     #[fixture]
     fn remove_pep() -> &'static str {
-        "tests/example-peps/example_basic/project_config.yaml"
+        "tests/example-peps/example_remove/project_config.yaml"
     }
 
     #[rstest]
@@ -138,5 +138,9 @@ mod tests {
     fn remove_pep_project(remove_pep: &'static str) {
         let proj = Project::from_config(remove_pep);
         assert_eq!(proj.is_ok(), true);
+
+        let samples = proj.unwrap().samples.unwrap().collect().unwrap();
+        let cols = samples.get_column_names();
+        assert_eq!(cols, &["sample_name","organism"])
     }
 }
