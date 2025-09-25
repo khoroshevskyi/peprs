@@ -17,7 +17,7 @@ pub struct Project {
 impl Project {
     ///
     /// Create a new PEP project struct from a simple csv alone (no modifiers)
-    /// 
+    ///
     pub fn from_csv<P>(path: P) -> Result<Self, Error>
     where
         P: AsRef<Path>,
@@ -27,10 +27,9 @@ impl Project {
         let samples = Some(
             LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
                 .with_has_header(true)
-                .finish()?
-                // TODO
-                // handle duplicate rows, with the same `sample_name`
-                // other attributes becoming lists
+                .finish()?, // TODO
+                            // handle duplicate rows, with the same `sample_name`
+                            // other attributes becoming lists
         );
 
         Ok(Self {
@@ -42,7 +41,7 @@ impl Project {
 
     ///
     /// Create a new PEP project struct from a project configuration file
-    /// 
+    ///
     pub fn from_config<P>(path: P) -> Result<Self, Error>
     where
         P: AsRef<Path>,
@@ -64,8 +63,7 @@ impl Project {
                 Some(
                     LazyCsvReader::new(PlPath::new(sample_table_path.to_str().unwrap()))
                         .with_has_header(true)
-                        .finish()?
-                        // TODO: merge duplicate sample names
+                        .finish()?, // TODO: merge duplicate sample names
                 )
             }
             None => None,
@@ -80,7 +78,6 @@ impl Project {
         // apply modifiers if they exist and if there is a sample table
         #[allow(clippy::collapsible_if)]
         if let Some(modifiers) = &config.sample_modifiers {
-
             // make sure they passed a sample table at all
             if let Some(lf) = samples_lf.take() {
                 let mut new_lf = lf;
@@ -95,7 +92,7 @@ impl Project {
             }
         }
 
-         Ok(Self {
+        Ok(Self {
             config: Some(config),
             samples: samples_lf,
             subsamples,
