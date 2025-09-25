@@ -1,14 +1,17 @@
-use std::path::Path;
 use std::fmt::Display;
+use std::fs::File;
+use std::io::BufReader;
+use std::path::Path;
 
 use polars::prelude::*;
+use serde_yaml;
 
 use crate::config::ProjectConfig;
 use crate::error::Error;
 
 pub struct Project {
     pub config: Option<ProjectConfig>,
-    pub samples: DataFrame,
+    pub samples: Option<DataFrame>,
     pub subsamples: Option<Vec<DataFrame>>,
 }
 
@@ -17,22 +20,77 @@ impl Project {
     where
         P: AsRef<Path>,
     {
-        let df = LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
-            .with_has_header(true)
-            .finish()?
-            .collect()?;
+        let config = None;
+        let subsamples = None;
+        let samples = Some(
+            LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
+                .with_has_header(true)
+                .finish()?
+                .collect()?,
+        );
 
         Ok(Self {
-            config: None,
-            samples: df,
-            subsamples: None,
+            config,
+            samples,
+            subsamples,
+        })
+    }
+    pub fn from_config<P>(path: P) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+    {
+        let config_file = File::open(&path)?;
+        let reader = BufReader::new(config_file);
+        let config: ProjectConfig = serde_yaml::from_reader(reader)?;
+
+        let config_dir = path.as_ref().parent().unwrap_or(Path::new("."));
+
+        // read in the sample table if it exists
+        let samples = match &config.sample_table {
+            Some(sample_table) => {
+                let sample_table_path = config_dir.join(sample_table);
+                Some(
+                    LazyCsvReader::new(PlPath::new(sample_table_path.to_str().unwrap()))
+                        .with_has_header(true)
+                        .finish()?
+                )
+            }
+            None => None,
+        };
+
+        let subsamples = match &config.subsample_table {
+            // TODO: implement subsample table logic
+            Some(_subsample_table) => None,
+            None => None,
+        };
+
+        // TODO: implement logic for any remove, etc
+        let samples = if let (Some(mut samples_lazy), Some(modifiers)) = (samples, &config.sample_modifiers) {
+            if let Some(cols_to_remove) = &modifiers.remove {
+                samples_lazy = samples_lazy.drop(cols(cols_to_remove.clone()));
+            }
+            Some(samples_lazy.collect()?)
+        } else if let Some(samples_lazy) = samples {
+            Some(samples_lazy.collect()?)
+        } else {
+            None
+        };
+
+         Ok(Self {
+            config: Some(config),
+            samples,
+            subsamples,
         })
     }
 }
 
 impl Display for Project {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.samples.fmt(f)
+        if let Some(samples) = &self.samples {
+            samples.fmt(f)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -45,13 +103,23 @@ mod tests {
 
     #[fixture]
     fn basic_csv() -> &'static str {
-        "tests/data/basic.csv"
+        "tests/example-peps/example_basic/sample_table.csv"
+    }
+
+    #[fixture]
+    fn basic_pep() -> &'static str {
+        "tests/example-peps/example_basic/project_config.yaml"
     }
 
     #[rstest]
     fn pep_from_csv(basic_csv: &'static str) {
         let proj = Project::from_csv(basic_csv);
         assert_eq!(proj.is_ok(), true);
-        println!("{}", proj.unwrap());
+    }
+
+    #[rstest]
+    fn basic_pep_project(basic_pep: &'static str) {
+        let proj = Project::from_config(basic_pep);
+        assert_eq!(proj.is_ok(), true);
     }
 }
