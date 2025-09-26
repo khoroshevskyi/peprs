@@ -41,26 +41,20 @@ impl Project {
     }
 
     ///
-    /// Create a new PEP project struct from a project configuration file
-    ///
-    pub fn from_config<P>(path: P) -> Result<Self, Error>
+    /// Create new Project object after parsing the project config. This
+    /// is an internal function to enable moer abstact wrappers
+    /// 
+    fn new_from_parsed_config<P>(config: ProjectConfig, config_dir: P) -> Result<Self, Error> 
     where
         P: AsRef<Path>,
     {
-        // open configuration file and deserialize from yaml to struct
-        let config_file = File::open(&path)?;
-        let reader = BufReader::new(config_file);
-        let config: ProjectConfig = serde_yaml::from_reader(reader)?;
-
-        // exrtract out the directory of the config file
-        let config_dir = path.as_ref().parent().unwrap_or(Path::new("."));
 
         // read in the sample table if it exists
         // if the user has specified a sample table, read it in
         // assuming its in the same directory as the project config file.
         let mut samples_lf = match &config.sample_table {
             Some(sample_table) => {
-                let sample_table_path = config_dir.join(sample_table);
+                let sample_table_path = config_dir.as_ref().join(sample_table);
                 Some(
                     LazyCsvReader::new(PlPath::new(sample_table_path.to_str().unwrap()))
                         .with_has_header(true)
@@ -137,6 +131,25 @@ impl Project {
             samples: samples_lf,
             subsamples,
         })
+    }
+
+    ///
+    /// Create a new PEP project struct from a project configuration file
+    /// that is a physical file on disk.
+    ///
+    pub fn from_config<P>(path: P) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+    {
+        // open configuration file and deserialize from yaml to struct
+        let config_file = File::open(&path)?;
+        let reader = BufReader::new(config_file);
+        let config: ProjectConfig = serde_yaml::from_reader(reader)?;
+
+        // exrtract out the directory of the config file
+        let config_dir = path.as_ref().parent().unwrap_or(Path::new("."));
+
+        Project::new_from_parsed_config(config, config_dir)
     }
 
     ///
