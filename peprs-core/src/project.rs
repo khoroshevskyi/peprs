@@ -11,8 +11,8 @@ use crate::error::Error;
 
 pub struct Project {
     pub config: Option<ProjectConfig>,
-    pub samples: Option<LazyFrame>,
-    pub subsamples: Option<Vec<LazyFrame>>,
+    pub samples: Option<DataFrame>,
+    pub subsamples: Option<Vec<DataFrame>>,
 }
 
 impl Project {
@@ -28,9 +28,8 @@ impl Project {
         let samples = Some(
             LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
                 .with_has_header(true)
-                .finish()?, // TODO
-                            // handle duplicate rows, with the same `sample_name`
-                            // other attributes becoming lists
+                .finish()?
+                .collect()?
         );
 
         Ok(Self {
@@ -126,9 +125,17 @@ impl Project {
             }
         }
 
+        // finally, collect the lazy frame
+        let samples = match samples_lf {
+            Some(lf) => {
+                Some(lf.collect()?)
+            },
+            None => None
+        };
+
         Ok(Self {
             config: Some(config),
-            samples: samples_lf,
+            samples,
             subsamples,
         })
     }
@@ -160,6 +167,24 @@ impl Project {
         self.config
             .as_ref()
             .map_or(consts::DEFAULT_PEP_VERSION, |cfg| &cfg.pep_version)
+    }
+
+    ///
+    /// Get the number of samples in the project
+    /// 
+    pub fn len(&self) -> usize {
+        self.samples
+            .as_ref()
+            .map_or(0, |df| df.height())
+    }
+
+    ///
+    /// Check if the project contains no samples
+    /// 
+    pub fn is_empty(&self) -> bool {
+        self.samples
+            .as_ref()
+            .is_none_or(|df| df.height() > 0)
     }
 }
 
@@ -212,7 +237,7 @@ mod tests {
         let proj = Project::from_config(remove_pep);
         assert_eq!(proj.is_ok(), true);
 
-        let samples = proj.unwrap().samples.unwrap().collect().unwrap();
+        let samples = proj.unwrap().samples.unwrap();
         let cols = samples.get_column_names();
         assert_eq!(cols, &["sample_name", "organism"])
     }
@@ -222,7 +247,7 @@ mod tests {
         let proj = Project::from_config(duplicate_pep);
         assert_eq!(proj.is_ok(), true);
 
-        let samples = proj.unwrap().samples.unwrap().collect().unwrap();
+        let samples = proj.unwrap().samples.unwrap();
         let cols = samples.get_column_names();
         assert_eq!(cols, &["sample_name", "organism", "time", "animal"])
     }
@@ -232,7 +257,7 @@ mod tests {
         let proj = Project::from_config(append_pep);
         assert_eq!(proj.is_ok(), true);
 
-        let samples = proj.unwrap().samples.unwrap().collect().unwrap();
+        let samples = proj.unwrap().samples.unwrap();
         let cols = samples.get_column_names();
         assert_eq!(cols, &["sample_name", "organism", "time", "read_type"])
     }
