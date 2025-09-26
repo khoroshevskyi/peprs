@@ -87,6 +87,15 @@ impl Project {
                     new_lf = new_lf.drop(cols(cols_to_remove));
                 }
 
+                // DUPLICATE
+                if let Some(duplicate_map) = &modifiers.duplicate {
+                    for (old_attribute_name, new_attribute_name) in duplicate_map {
+                        new_lf = new_lf.with_column(
+                            col(old_attribute_name).alias(new_attribute_name)
+                        );
+                    }
+                }
+
                 // after all potential modifications, re-assign
                 samples_lf = Some(new_lf)
             }
@@ -122,6 +131,11 @@ mod tests {
         "tests/example-peps/example_remove/project_config.yaml"
     }
 
+    #[fixture]
+    fn duplicate_pep() -> &'static str {
+        "tests/example-peps/example_duplicate/project_config.yaml"
+    }
+
     #[rstest]
     fn pep_from_csv(basic_csv: &'static str) {
         let proj = Project::from_csv(basic_csv);
@@ -142,5 +156,15 @@ mod tests {
         let samples = proj.unwrap().samples.unwrap().collect().unwrap();
         let cols = samples.get_column_names();
         assert_eq!(cols, &["sample_name","organism"])
+    }
+
+    #[rstest]
+    fn duplicate_pep_project(duplicate_pep: &'static str) {
+        let proj = Project::from_config(duplicate_pep);
+        assert_eq!(proj.is_ok(), true);
+
+        let samples = proj.unwrap().samples.unwrap().collect().unwrap();
+        let cols = samples.get_column_names();
+        assert_eq!(cols, &["sample_name", "organism", "time", "animal"])
     }
 }
