@@ -98,9 +98,7 @@ impl Project {
                 // APPEND
                 if let Some(append_map) = &modifiers.append {
                     for (new_col_name, value) in append_map {
-                        new_lf = new_lf.with_column(
-                            lit(value.to_string()).alias(new_col_name)
-                        )
+                        new_lf = new_lf.with_column(lit(value.to_string()).alias(new_col_name))
                     }
                 }
 
@@ -124,7 +122,7 @@ impl Project {
                 //                 })
                 //                 .collect()
                 //             )
-                //         )   
+                //         )
                 //     }
                 // }
 
