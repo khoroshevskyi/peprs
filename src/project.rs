@@ -90,9 +90,8 @@ impl Project {
                 // DUPLICATE
                 if let Some(duplicate_map) = &modifiers.duplicate {
                     for (old_attribute_name, new_attribute_name) in duplicate_map {
-                        new_lf = new_lf.with_column(
-                            col(old_attribute_name).alias(new_attribute_name)
-                        );
+                        new_lf =
+                            new_lf.with_column(col(old_attribute_name).alias(new_attribute_name));
                     }
                 }
 
@@ -155,7 +154,7 @@ mod tests {
 
         let samples = proj.unwrap().samples.unwrap().collect().unwrap();
         let cols = samples.get_column_names();
-        assert_eq!(cols, &["sample_name","organism"])
+        assert_eq!(cols, &["sample_name", "organism"])
     }
 
     #[rstest]
