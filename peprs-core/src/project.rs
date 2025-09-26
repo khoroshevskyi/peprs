@@ -5,6 +5,7 @@ use std::path::Path;
 use polars::prelude::*;
 use serde_yaml;
 
+use crate::consts;
 use crate::config::{ImplyCondition, ProjectConfig};
 use crate::error::Error;
 
@@ -137,6 +138,16 @@ impl Project {
             subsamples,
         })
     }
+
+    ///
+    /// Get the pep version in the config if it exists
+    /// otherwise return the default version
+    /// 
+    pub fn get_pep_version(&self) -> &str {
+        self.config
+            .as_ref()
+            .map_or(consts::DEFAULT_PEP_VERSION, |cfg| &cfg.pep_version)
+    }
 }
 
 #[cfg(test)]
@@ -148,27 +159,27 @@ mod tests {
 
     #[fixture]
     fn basic_csv() -> &'static str {
-        "tests/example-peps/example_basic/sample_table.csv"
+        "../example-peps/example_basic/sample_table.csv"
     }
 
     #[fixture]
     fn basic_pep() -> &'static str {
-        "tests/example-peps/example_basic/project_config.yaml"
+        "../example-peps/example_basic/project_config.yaml"
     }
 
     #[fixture]
     fn remove_pep() -> &'static str {
-        "tests/example-peps/example_remove/project_config.yaml"
+        "../example-peps/example_remove/project_config.yaml"
     }
 
     #[fixture]
     fn duplicate_pep() -> &'static str {
-        "tests/example-peps/example_duplicate/project_config.yaml"
+        "../example-peps/example_duplicate/project_config.yaml"
     }
 
     #[fixture]
     fn append_pep() -> &'static str {
-        "tests/example-peps/example_append/project_config.yaml"
+        "../example-peps/example_append/project_config.yaml"
     }
 
     #[rstest]
