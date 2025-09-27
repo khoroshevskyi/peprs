@@ -1,6 +1,6 @@
-use pyo3::prelude::*;
-use pyo3::exceptions::PyRuntimeError;
 use peprs_core::sample::Sample;
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
 
 use crate::project::PyProject;
 
@@ -20,7 +20,7 @@ impl PySamplesIter {
         // borrow the project from the Py<PyProject> handle to ensure it's not dropped
         // while the iterator is alive.
         let project = self.project.borrow(py);
-        
+
         if self.index >= project.inner.samples.height() {
             return Ok(None);
         }

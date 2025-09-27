@@ -5,8 +5,8 @@ use std::path::Path;
 use polars::prelude::*;
 use serde_yaml;
 
-use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX};
 use crate::config::ProjectConfig;
+use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX};
 use crate::error::Error;
 use crate::sample::{Sample, SamplesIter};
 
@@ -27,11 +27,10 @@ impl Project {
     {
         let config = None;
         let subsamples = None;
-        let samples = 
-            LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
-                .with_has_header(true)
-                .finish()?
-                .collect()?;
+        let samples = LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
+            .with_has_header(true)
+            .finish()?
+            .collect()?;
 
         Ok(Self {
             sample_table_index: DEFAULT_SAMPLE_TABLE_INDEX.to_string(),
@@ -44,12 +43,14 @@ impl Project {
     ///
     /// Create new Project object after parsing the project config. This
     /// is an internal function to enable moer abstact wrappers
-    /// 
-    fn new_from_parsed_config<P>(config: ProjectConfig, config_dir: P) -> Result<Self, Error> 
+    ///
+    fn new_from_parsed_config<P>(config: ProjectConfig, config_dir: P) -> Result<Self, Error>
     where
         P: AsRef<Path>,
     {
-        let sample_table_index = config.sample_table_index.as_deref()
+        let sample_table_index = config
+            .sample_table_index
+            .as_deref()
             .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX);
 
         // read in the sample table if it exists
@@ -131,10 +132,8 @@ impl Project {
 
         // finally, collect the lazy frame
         let samples = match samples_lf {
-            Some(lf) => {
-                Some(lf.collect()?)
-            },
-            None => None
+            Some(lf) => Some(lf.collect()?),
+            None => None,
         };
 
         Ok(Self {
@@ -167,7 +166,7 @@ impl Project {
     ///
     /// Get the pep version in the config if it exists
     /// otherwise return the default version
-    /// 
+    ///
     pub fn get_pep_version(&self) -> &str {
         self.config
             .as_ref()
@@ -176,30 +175,37 @@ impl Project {
 
     ///
     /// Get the number of samples in the project
-    /// 
+    ///
     pub fn len(&self) -> usize {
         self.samples.height()
     }
 
     ///
     /// Check if the project contains no samples
-    /// 
+    ///
     pub fn is_empty(&self) -> bool {
         self.samples.is_empty()
     }
 
     ///
     /// Retrieve a sample by its sample name.
-    /// 
+    ///
     pub fn get_sample<'a>(&'a self, name: &str) -> PolarsResult<Option<Sample<'a>>> {
-        let mask = self.samples
+        let mask = self
+            .samples
             .column(&self.sample_table_index)?
             .as_series()
-            .ok_or_else(|| PolarsError::ColumnNotFound(
-                format!("Sample table index column '{}' not found", self.sample_table_index).into()
-            ))?
+            .ok_or_else(|| {
+                PolarsError::ColumnNotFound(
+                    format!(
+                        "Sample table index column '{}' not found",
+                        self.sample_table_index
+                    )
+                    .into(),
+                )
+            })?
             .equal(name)?;
-            
+
         // find the index of the first `true` value in our mask.
         // we can iterate through the mask and find the position of the first `Some(true)`.
         if let Some(row_index) = mask.iter().position(|val| val == Some(true)) {
@@ -307,7 +313,10 @@ mod tests {
 
         let sample = sample.unwrap();
         assert_eq!(sample.get("file").is_some(), true);
-        assert_eq!(sample.get("file").unwrap().str_value(), "data/frog1_data.txt");
+        assert_eq!(
+            sample.get("file").unwrap().str_value(),
+            "data/frog1_data.txt"
+        );
     }
 
     #[rstest]

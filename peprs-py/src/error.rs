@@ -1,8 +1,4 @@
-use pyo3::exceptions::{
-    PyIOError,
-    PyValueError,
-    PyRuntimeError,
-};
+use pyo3::exceptions::{PyIOError, PyRuntimeError, PyValueError};
 
 pub struct PeprsCoreError(peprs_core::error::Error);
 
@@ -15,7 +11,9 @@ impl std::convert::From<PeprsCoreError> for pyo3::PyErr {
             peprs_core::error::Error::Config(error) => PyValueError::new_err(error),
             peprs_core::error::Error::Processing(error) => PyRuntimeError::new_err(error),
             peprs_core::error::Error::InvalidFormat(error) => PyValueError::new_err(error),
-            peprs_core::error::Error::Polars(polars_error) => PyRuntimeError::new_err(format!("Polars error occured: {}", polars_error)),
+            peprs_core::error::Error::Polars(polars_error) => {
+                PyRuntimeError::new_err(format!("Polars error occured: {}", polars_error))
+            }
         }
     }
 }

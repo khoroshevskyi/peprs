@@ -1,4 +1,7 @@
-use std::{collections::HashMap, ops::{Deref, DerefMut}};
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+};
 
 use polars::prelude::*;
 
@@ -6,16 +9,29 @@ use polars::prelude::*;
 pub struct Sample<'a>(HashMap<String, AnyValue<'a>>);
 
 impl<'a> Sample<'a> {
+    ///
+    /// Create a new Sample object from a data frame and row index
+    ///
     pub fn from_dataframe_row(df: &'a DataFrame, row_index: usize) -> PolarsResult<Self> {
         let mut sample = HashMap::new();
-        
+
         for (col_name, series) in df.get_columns().iter().enumerate() {
             let column_name = df.get_column_names()[col_name].to_string();
             let value = series.get(row_index)?;
             sample.insert(column_name, value);
         }
-        
+
         Ok(Sample(sample))
+    }
+
+    ///
+    /// Convert the Sample into an owned HashMap, via cloning
+    ///
+    pub fn into_map(self) -> HashMap<String, String> {
+        self.0
+            .into_iter()
+            .map(|(key, value)| (key, value.to_string()))
+            .collect()
     }
 }
 
@@ -45,11 +61,15 @@ pub struct SamplesIter<'a> {
 
 impl<'a> SamplesIter<'a> {
     pub fn new(df: &'a DataFrame) -> Self {
-        let column_names = df.get_column_names().into_iter().map(|s| s.to_string()).collect();
-        SamplesIter { 
-            df, 
+        let column_names = df
+            .get_column_names()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect();
+        SamplesIter {
+            df,
             column_names,
-            row_index: 0 
+            row_index: 0,
         }
     }
 }
@@ -63,7 +83,7 @@ impl<'a> Iterator for SamplesIter<'a> {
         }
 
         let mut attributes = HashMap::new();
-        
+
         // iterate over the columns of the dataframe
         for (i, series) in self.df.get_columns().iter().enumerate() {
             // we can safely unwrap here because we've already checked the row_index bounds.
