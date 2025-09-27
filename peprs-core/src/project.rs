@@ -8,11 +8,11 @@ use serde_yaml;
 use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX};
 use crate::config::ProjectConfig;
 use crate::error::Error;
-use crate::sample::Sample;
+use crate::sample::{Sample, SamplesIter};
 
 pub struct Project {
     pub config: Option<ProjectConfig>,
-    pub samples: Option<DataFrame>,
+    pub samples: DataFrame,
     pub subsamples: Option<Vec<DataFrame>>,
     pub sample_table_index: String,
 }
@@ -27,12 +27,11 @@ impl Project {
     {
         let config = None;
         let subsamples = None;
-        let samples = Some(
+        let samples = 
             LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
                 .with_has_header(true)
                 .finish()?
-                .collect()?
-        );
+                .collect()?;
 
         Ok(Self {
             sample_table_index: DEFAULT_SAMPLE_TABLE_INDEX.to_string(),
@@ -141,7 +140,7 @@ impl Project {
         Ok(Self {
             sample_table_index: sample_table_index.to_owned(),
             config: Some(config),
-            samples,
+            samples: samples.unwrap_or(DataFrame::empty()),
             subsamples,
         })
     }
@@ -179,42 +178,43 @@ impl Project {
     /// Get the number of samples in the project
     /// 
     pub fn len(&self) -> usize {
-        self.samples
-            .as_ref()
-            .map_or(0, |df| df.height())
+        self.samples.height()
     }
 
     ///
     /// Check if the project contains no samples
     /// 
     pub fn is_empty(&self) -> bool {
-        self.samples
-            .as_ref()
-            .is_none_or(|df| df.height() > 0)
+        self.samples.is_empty()
     }
 
+    ///
+    /// Retrieve a sample by its sample name.
+    /// 
     pub fn get_sample<'a>(&'a self, name: &str) -> PolarsResult<Option<Sample<'a>>> {
-        if let Some(samples) = self.samples.as_ref() {
-
-            let mask = samples
-                .column(&self.sample_table_index)?
-                .as_series()
-                .ok_or_else(|| PolarsError::ColumnNotFound(
-                    format!("Sample table index column '{}' not found", self.sample_table_index).into()
-                ))?
-                .equal(name)?;
-                
-            // find the index of the first `true` value in our mask.
-            // we can iterate through the mask and find the position of the first `Some(true)`.
-            if let Some(row_index) = mask.iter().position(|val| val == Some(true)) {
-                return Ok(Some(Sample::from_dataframe_row(samples, row_index)?));
-            } else {
-                // if no `true` values were in the mask, the sample was not found.
-                return Ok(None);
-            }
+        let mask = self.samples
+            .column(&self.sample_table_index)?
+            .as_series()
+            .ok_or_else(|| PolarsError::ColumnNotFound(
+                format!("Sample table index column '{}' not found", self.sample_table_index).into()
+            ))?
+            .equal(name)?;
+            
+        // find the index of the first `true` value in our mask.
+        // we can iterate through the mask and find the position of the first `Some(true)`.
+        if let Some(row_index) = mask.iter().position(|val| val == Some(true)) {
+            Ok(Some(Sample::from_dataframe_row(&self.samples, row_index)?))
+        } else {
+            // if no `true` values were in the mask, the sample was not found.
+            Ok(None)
         }
+    }
 
-        Ok(None)   
+    ///
+    /// Iterate over the samples in the project
+    ///
+    pub fn iter_samples(&'_ self) -> SamplesIter<'_> {
+        SamplesIter::new(&self.samples)
     }
 }
 
@@ -267,7 +267,7 @@ mod tests {
         let proj = Project::from_config(remove_pep);
         assert_eq!(proj.is_ok(), true);
 
-        let samples = proj.unwrap().samples.unwrap();
+        let samples = proj.unwrap().samples;
         let cols = samples.get_column_names();
         assert_eq!(cols, &["sample_name", "organism"])
     }
@@ -277,7 +277,7 @@ mod tests {
         let proj = Project::from_config(duplicate_pep);
         assert_eq!(proj.is_ok(), true);
 
-        let samples = proj.unwrap().samples.unwrap();
+        let samples = proj.unwrap().samples;
         let cols = samples.get_column_names();
         assert_eq!(cols, &["sample_name", "organism", "time", "animal"])
     }
@@ -287,7 +287,7 @@ mod tests {
         let proj = Project::from_config(append_pep);
         assert_eq!(proj.is_ok(), true);
 
-        let samples = proj.unwrap().samples.unwrap();
+        let samples = proj.unwrap().samples;
         let cols = samples.get_column_names();
         assert_eq!(cols, &["sample_name", "organism", "time", "read_type"])
     }
@@ -308,5 +308,16 @@ mod tests {
         let sample = sample.unwrap();
         assert_eq!(sample.get("file").is_some(), true);
         assert_eq!(sample.get("file").unwrap().str_value(), "data/frog1_data.txt");
+    }
+
+    #[rstest]
+    fn iterate_samples(basic_pep: &'static str) {
+        let proj = Project::from_config(basic_pep);
+        assert_eq!(proj.is_ok(), true);
+
+        let proj = proj.unwrap();
+        let samples = proj.iter_samples().collect::<Vec<Sample<'_>>>();
+
+        assert_eq!(samples.len(), 2);
     }
 }

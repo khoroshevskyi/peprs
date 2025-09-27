@@ -33,3 +33,49 @@ impl<'a> DerefMut for Sample<'a> {
         &mut self.0
     }
 }
+
+///
+/// An iterator over the samples in a DataFrame.
+///
+pub struct SamplesIter<'a> {
+    df: &'a DataFrame,
+    column_names: Vec<String>,
+    row_index: usize,
+}
+
+impl<'a> SamplesIter<'a> {
+    pub fn new(df: &'a DataFrame) -> Self {
+        let column_names = df.get_column_names().into_iter().map(|s| s.to_string()).collect();
+        SamplesIter { 
+            df, 
+            column_names,
+            row_index: 0 
+        }
+    }
+}
+
+impl<'a> Iterator for SamplesIter<'a> {
+    type Item = Sample<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.row_index >= self.df.height() {
+            return None;
+        }
+
+        let mut attributes = HashMap::new();
+        
+        // iterate over the columns of the dataframe
+        for (i, series) in self.df.get_columns().iter().enumerate() {
+            // we can safely unwrap here because we've already checked the row_index bounds.
+            let value = series.get(self.row_index).unwrap();
+            // use the cached column name, cloning it for insertion.
+            let column_name = self.column_names[i].clone();
+            attributes.insert(column_name, value);
+        }
+
+        // increment the index for the next call
+        self.row_index += 1;
+
+        Some(Sample(attributes))
+    }
+}
