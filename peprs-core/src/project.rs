@@ -320,4 +320,19 @@ mod tests {
 
         assert_eq!(samples.len(), 2);
     }
+
+    #[rstest]
+    fn iterate_samples_get_values(basic_pep: &'static str) {
+        let proj = Project::from_config(basic_pep);
+        assert_eq!(proj.is_ok(), true);
+
+        let proj = proj.unwrap();
+        let samples = proj
+            .iter_samples()
+            .filter_map(|s| s.get("file").map(|av| av.str_value().to_string()))
+            .collect::<Vec<String>>();
+
+        assert_eq!(samples.len(), 2);
+        assert_eq!(samples, &["data/frog1_data.txt", "data/frog2_data.txt"]);
+    }
 }
