@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::{Deref, DerefMut}};
 
 use polars::prelude::*;
 
@@ -16,5 +16,20 @@ impl<'a> Sample<'a> {
         }
         
         Ok(Sample(sample))
+    }
+}
+
+impl<'a> Deref for Sample<'a> {
+    type Target = HashMap<String, AnyValue<'a>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+// We can also implement `DerefMut` if we want to allow mutable access.
+impl<'a> DerefMut for Sample<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }

@@ -1370,6 +1370,7 @@ name = "peprs-core"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "itertools",
  "polars",
  "pretty_assertions",
  "rstest",
