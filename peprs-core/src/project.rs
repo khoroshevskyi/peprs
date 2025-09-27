@@ -5,14 +5,16 @@ use std::path::Path;
 use polars::prelude::*;
 use serde_yaml;
 
-use crate::consts;
-use crate::config::{ImplyCondition, ProjectConfig};
+use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX};
+use crate::config::ProjectConfig;
 use crate::error::Error;
+use crate::sample::{self, Sample};
 
 pub struct Project {
     pub config: Option<ProjectConfig>,
     pub samples: Option<DataFrame>,
     pub subsamples: Option<Vec<DataFrame>>,
+    pub sample_table_index: String,
 }
 
 impl Project {
@@ -33,6 +35,7 @@ impl Project {
         );
 
         Ok(Self {
+            sample_table_index: DEFAULT_SAMPLE_TABLE_INDEX.to_string(),
             config,
             samples,
             subsamples,
@@ -47,6 +50,9 @@ impl Project {
     where
         P: AsRef<Path>,
     {
+        let sample_table_index = config.sample_table_index
+            .as_ref().map(|s| s.as_str())
+            .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX);
 
         // read in the sample table if it exists
         // if the user has specified a sample table, read it in
@@ -134,6 +140,7 @@ impl Project {
         };
 
         Ok(Self {
+            sample_table_index: sample_table_index.to_owned(),
             config: Some(config),
             samples,
             subsamples,
@@ -185,6 +192,35 @@ impl Project {
         self.samples
             .as_ref()
             .is_none_or(|df| df.height() > 0)
+    }
+
+    ///
+    /// Get a sample by its name
+    /// 
+    pub fn get_sample(&self, name: &str) -> PolarsResult<Option<Sample>> {
+        // Use an if let to safely get a reference to the DataFrame.
+        if let Some(df) = self.samples.as_ref() {
+            // 1. Get the column we want to search in.
+            let series = df.column(&self.sample_table_index)?;
+
+            // 2. Create a boolean mask where the column's values equal the input name.
+            let mask = series.equal(name)?;
+
+            // 3. Find the index of the first `true` value in the mask.
+            //    `arg_max()` on a boolean series returns the index of the first `true`.
+            if let Some(idx) = mask.arg_max() {
+                // 4. If an index was found, create the Sample from that row
+                //    in the *original* DataFrame. This solves the lifetime issue.
+                let sample = Sample::from_dataframe_row(df, idx)?;
+                Ok(Some(sample))
+            } else {
+                // No row matched the name.
+                Ok(None)
+            }
+        } else {
+            // No samples DataFrame exists in the project.
+            Ok(None)
+        }
     }
 }
 
