@@ -1,15 +1,7 @@
-[package]
-name = "peprs"
-version = "0.1.0"
+[workspace]
+resolver = "3"
 edition = "2024"
-
-[dependencies]
-polars = { version = "x", features = ["lazy"]}
-chrono = "0.4.42"
-serde = { version = "1.0.226", features = ["derive"] }
-serde_yaml = "0.9.34"
-thiserror = "2.0.16"
-
-[dev-dependencies]
-pretty_assertions = "1.4.1"
-rstest = "0.26.1"
+members = [
+    "peprs-core",
+    "peprs-py"
+]
