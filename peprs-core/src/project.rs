@@ -132,8 +132,6 @@ impl Project {
                             // TODO: how to fill with null?
                             .otherwise(lit("null")),
                         );
-                        println!("{:?}", new_lf.clone().collect());
-                        new_lf = new_lf.lazy();
                     }
                 }
 
