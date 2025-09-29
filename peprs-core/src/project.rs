@@ -109,14 +109,12 @@ impl Project {
                                 &irule
                                     .if_condition
                                     .iter()
-                                    .map(|(attr, condition)| {
-                                        match condition {
-                                            ImplyCondition::Single(c) => col(attr).eq(lit(c.as_str())),
-                                            ImplyCondition::Multiple(c) => col(attr).is_in(
-                                                lit(Series::new(PlSmallStr::from("values"), c)),
-                                                false,
-                                            ),
-                                        }
+                                    .map(|(attr, condition)| match condition {
+                                        ImplyCondition::Single(c) => col(attr).eq(lit(c.as_str())),
+                                        ImplyCondition::Multiple(c) => col(attr).is_in(
+                                            lit(Series::new(PlSmallStr::from("values"), c)),
+                                            false,
+                                        ),
                                     })
                                     .collect::<Vec<Expr>>(),
                             ))
@@ -124,9 +122,7 @@ impl Project {
                                 &irule
                                     .then_action
                                     .iter()
-                                    .map(|(col_name, value)| {
-                                        lit(value.clone()).alias(col_name)
-                                    })
+                                    .map(|(col_name, value)| lit(value.clone()).alias(col_name))
                                     .collect::<Vec<Expr>>(),
                             ))
                             // TODO: how to fill with null?
