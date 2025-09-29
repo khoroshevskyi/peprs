@@ -5,7 +5,7 @@ use std::path::Path;
 use polars::prelude::*;
 use serde_yaml;
 
-use crate::config::ProjectConfig;
+use crate::config::{ImplyCondition, ProjectConfig};
 use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX};
 use crate::error::Error;
 use crate::sample::{Sample, SamplesIter};
@@ -102,28 +102,38 @@ impl Project {
                 }
 
                 // IMPLY
-                // if let Some(imply_rules) = &modifiers.imply {
-                //     for imply_rule in imply_rules {
-                //         new_lf = new_lf.with_column(
-                //             coalesce(
-                //         imply_rule
-                //                 .if_condition
-                //                 .iter()
-                //                 .map(|(attribute, condition)| {
-                //                     match condition {
-                //                         ImplyCondition::Single(c) => {
-                //                            when(col(attribute).eq(lit(c.to_string())))
-                //                         }
-                //                         ImplyCondition::Multiple(c) => {
-                //                             when(col(attribute).is_in(c, false))
-                //                         }
-                //                     }
-                //                 })
-                //                 .collect()
-                //             )
-                //         )
-                //     }
-                // }
+                if let Some(imply_rules) = &modifiers.imply {
+                    for irule in imply_rules {
+                        new_lf = new_lf.with_column(
+                            when(coalesce(
+                                &irule
+                                    .if_condition
+                                    .iter()
+                                    .map(|(attr, condition)| {
+                                        match condition {
+                                            ImplyCondition::Single(c) => col(attr).eq(lit(c.as_str())),
+                                            ImplyCondition::Multiple(c) => col(attr).is_in(
+                                                lit(Series::new(PlSmallStr::from("values"), c)),
+                                                false,
+                                            ),
+                                        }
+                                    })
+                                    .collect::<Vec<Expr>>(),
+                            ))
+                            .then(coalesce(
+                                &irule
+                                    .then_action
+                                    .iter()
+                                    .map(|(col_name, value)| {
+                                        lit(value.clone()).alias(col_name)
+                                    })
+                                    .collect::<Vec<Expr>>(),
+                            ))
+                            // TODO: how to fill with null?
+                            .otherwise(lit("null")),
+                        )
+                    }
+                }
 
                 // after all potential modifications, re-assign
                 samples_lf = Some(new_lf)
@@ -256,6 +266,11 @@ mod tests {
         "../example-peps/example_append/project_config.yaml"
     }
 
+    #[fixture]
+    fn imply_pep() -> &'static str {
+        "../example-peps/example_imply/project_config.yaml"
+    }
+
     #[rstest]
     fn pep_from_csv(basic_csv: &'static str) {
         let proj = Project::from_csv(basic_csv);
@@ -296,6 +311,14 @@ mod tests {
         let samples = proj.unwrap().samples;
         let cols = samples.get_column_names();
         assert_eq!(cols, &["sample_name", "organism", "time", "read_type"])
+    }
+
+    #[rstest]
+    fn imply_pep_project(imply_pep: &'static str) {
+        let proj = Project::from_config(imply_pep);
+        assert_eq!(proj.is_ok(), true);
+
+        println!("{:?}", proj.unwrap().samples);
     }
 
     #[rstest]
