@@ -9,6 +9,7 @@ use crate::config::{ImplyCondition, ProjectConfig};
 use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX};
 use crate::error::Error;
 use crate::sample::{Sample, SamplesIter};
+use crate::utils::build_derive_template_expr;
 
 pub struct Project {
     pub config: Option<ProjectConfig>,
@@ -102,22 +103,25 @@ impl Project {
                 }
 
                 // IMPLY
-                if let Some(imply_rules) = &modifiers.imply {
-
-                }
+                if let Some(imply_rules) = &modifiers.imply {}
 
                 // DERIVE
                 if let Some(derive_rule) = &modifiers.derive {
-                    for col_to_replace in derive_rule.attributes.iter() {
-                        let keys: Vec<String> = derive_rule.sources.keys().cloned().collect();
-                        let values: Vec<String> = derive_rule.sources.values().cloned().collect();
-                        
-                        new_lf = new_lf.with_columns([
-                            col(col_to_replace).replace(
-                                lit(Series::new("".into(), keys)),
-                                lit(Series::new("".into(), values))
-                            )
-                        ]);
+                    for col_to_derive in &derive_rule.attributes {
+                        // start with the original column as the final "else" case
+                        let mut final_expr = col(col_to_derive);
+
+                        // chain a when-then for each source template
+                        for (key, template) in &derive_rule.sources {
+                            let template_expr = build_derive_template_expr(template)?;
+
+                            final_expr = when(col(col_to_derive).eq(lit(key.clone())))
+                                .then(template_expr)
+                                .otherwise(final_expr);
+                        }
+
+                        // apply the chained expression to the DataFrame
+                        new_lf = new_lf.with_column(final_expr.alias(col_to_derive));
                     }
                 }
 
