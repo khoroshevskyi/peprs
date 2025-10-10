@@ -103,31 +103,21 @@ impl Project {
 
                 // IMPLY
                 if let Some(imply_rules) = &modifiers.imply {
-                    for irule in imply_rules {
-                        new_lf = new_lf.with_column(
-                            when(coalesce(
-                                &irule
-                                    .if_condition
-                                    .iter()
-                                    .map(|(attr, condition)| match condition {
-                                        ImplyCondition::Single(c) => col(attr).eq(lit(c.as_str())),
-                                        ImplyCondition::Multiple(c) => col(attr).is_in(
-                                            lit(Series::new(PlSmallStr::from("values"), c)),
-                                            false,
-                                        ),
-                                    })
-                                    .collect::<Vec<Expr>>(),
-                            ))
-                            .then(coalesce(
-                                &irule
-                                    .then_action
-                                    .iter()
-                                    .map(|(col_name, value)| lit(value.clone()).alias(col_name))
-                                    .collect::<Vec<Expr>>(),
-                            ))
-                            // TODO: how to fill with null?
-                            .otherwise(lit("null")),
-                        );
+
+                }
+
+                // DERIVE
+                if let Some(derive_rule) = &modifiers.derive {
+                    for col_to_replace in derive_rule.attributes.iter() {
+                        let keys: Vec<String> = derive_rule.sources.keys().cloned().collect();
+                        let values: Vec<String> = derive_rule.sources.values().cloned().collect();
+                        
+                        new_lf = new_lf.with_columns([
+                            col(col_to_replace).replace(
+                                lit(Series::new("".into(), keys)),
+                                lit(Series::new("".into(), values))
+                            )
+                        ]);
                     }
                 }
 
@@ -267,6 +257,11 @@ mod tests {
         "../example-peps/example_imply/project_config.yaml"
     }
 
+    #[fixture]
+    fn derive_pep() -> &'static str {
+        "../example-peps/example_derive/project_config.yaml"
+    }
+
     #[rstest]
     fn pep_from_csv(basic_csv: &'static str) {
         let proj = Project::from_csv(basic_csv);
@@ -312,6 +307,16 @@ mod tests {
     #[rstest]
     fn imply_pep_project(imply_pep: &'static str) {
         let proj = Project::from_config(imply_pep);
+        // let proj = proj.unwrap();
+        assert_eq!(proj.is_ok(), true);
+
+        println!("{:?}", proj.unwrap().samples);
+    }
+
+    #[rstest]
+    fn derive_pep_project(derive_pep: &'static str) {
+        let proj = Project::from_config(derive_pep);
+        // let proj = proj.unwrap();
         assert_eq!(proj.is_ok(), true);
 
         println!("{:?}", proj.unwrap().samples);
