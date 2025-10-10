@@ -63,6 +63,7 @@ impl Project {
                 Some(
                     LazyCsvReader::new(PlPath::new(sample_table_path.to_str().unwrap()))
                         .with_has_header(true)
+                        .with_infer_schema_length(Some(10_000))
                         .finish()?, // TODO: merge duplicate sample names
                 )
             }
