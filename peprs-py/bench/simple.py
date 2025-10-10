@@ -17,7 +17,7 @@ def benchmark_peprs(pep_path: str):
     print(f"Peprs loaded project with {len(proj.samples)} samples in {end - start:.2f} seconds.")
     return proj
 
-PATH = "/Users/nathanleroy/Desktop/databio-encode_hg38_filtered-default/project_config.yaml"
+PATH = "/Users/nathanleroy/Desktop/databio-bedbase_raw-default/bedbase_raw_config.yaml"
 
 benchmark_peppy(PATH)
 benchmark_peprs(PATH)
