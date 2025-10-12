@@ -45,18 +45,12 @@ impl Project {
     /// Create a new PEP project struct from a project configuration file
     /// that is a physical file on disk.
     ///
-    pub fn from_config<P>(path: P) -> Result<Self, Error>
+    pub fn from_config<P>(path: P, ) -> Result<Self, Error>
     where
-        P: AsRef<Path>,
-    {
-        // open configuration file and deserialize from yaml to struct
-        let config_file = File::open(&path)?;
-        let reader = BufReader::new(config_file);
-        let config: ProjectConfig = serde_yaml::from_reader(reader)?;
-
-        // exrtract out the directory of the config file
+        P: AsRef<Path> + Clone,
+    {   
+        let config = Self::load_project_config(path.clone())?;     
         let config_dir = path.as_ref().parent().unwrap_or(Path::new("."));
-
         Project::new_from_parsed_config(config, config_dir)
     }
 
@@ -111,6 +105,53 @@ impl Project {
             // if no `true` values were in the mask, the sample was not found.
             Ok(None)
         }
+    }
+    
+    ///
+    /// The main entry point for loading the project configuration
+    ///
+    pub fn load_project_config(path: impl AsRef<Path>) -> Result<ProjectConfig, Error> {
+        let path = path.as_ref();
+        let config_file = File::open(path)?;
+        let reader = BufReader::new(config_file);
+        let config: ProjectConfig = serde_yaml::from_reader(reader)?;
+        
+        // start the recursive parsing process, passing the parent dir for path resolution
+        let parent_dir = path.parent().unwrap_or_else(|| Path::new(""));
+
+        Self::parse_and_apply_project_modifiers(config, parent_dir)
+    }
+
+    ///
+    /// Recursive helper function that consumes and returns a config
+    /// after applying and potential project modifiers
+    /// 
+    fn parse_and_apply_project_modifiers(mut config: ProjectConfig, base_path: &Path) -> Result<ProjectConfig, Error> {
+        // take the modifiers out, leaving None in their place to avoid re-processing.
+        if let Some(modifiers) = config.project_modifiers.take() {
+            
+            // handle imports first (they are the base)
+            if let Some(import_paths) = modifiers.import {
+                for import_path_str in import_paths {
+                    // resolve the path relative to the current config's directory
+                    let import_path = base_path.join(import_path_str);
+                    
+                    // recursively load and parse the imported config
+                    let imported_config = Self::load_project_config(&import_path)?;
+                    config = config.with_merge(imported_config);
+                }
+            }
+            
+            // handle amendments second (they override the imports and the base)
+            if let Some(amendments) = modifiers.amend {
+                for amendment_variant in amendments.values() {
+                    config = config.with_amendment(amendment_variant.to_owned());
+                }
+            }
+        }
+        
+        // Return the fully processed config
+        Ok(config)
     }
 
     ///
