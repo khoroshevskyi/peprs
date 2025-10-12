@@ -448,7 +448,22 @@ mod tests {
         let proj = Project::from_config(derive_pep).build();
         assert_eq!(proj.is_ok(), true);
 
-        // TODO: test that the derive attribute actually worked
+        let correct_vals = vec![
+            format!("{}/data/lab/project/pig_0h.fastq", std::env::var("HOME").unwrap()),
+            format!("{}/data/lab/project/pig_1h.fastq", std::env::var("HOME").unwrap()),
+            "/path/from/collaborator/weirdNamingScheme_id_003.fastq".to_string(),
+            "/path/from/collaborator/weirdNamingScheme_id_004.fastq".to_string()
+        ];
+        let proj = proj.unwrap();
+        let protocol_values = proj
+            .samples
+            .column("file_path")
+            .unwrap()
+            .str()
+            .unwrap()
+            .into_no_null_iter()
+            .collect::<Vec<_>>();
+        assert_eq!(protocol_values, correct_vals);
     }
 
     #[rstest]
