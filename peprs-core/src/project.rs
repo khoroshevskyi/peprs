@@ -42,6 +42,78 @@ impl Project {
     }
 
     ///
+    /// Create a new PEP project struct from a project configuration file
+    /// that is a physical file on disk.
+    ///
+    pub fn from_config<P>(path: P) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+    {
+        // open configuration file and deserialize from yaml to struct
+        let config_file = File::open(&path)?;
+        let reader = BufReader::new(config_file);
+        let config: ProjectConfig = serde_yaml::from_reader(reader)?;
+
+        // exrtract out the directory of the config file
+        let config_dir = path.as_ref().parent().unwrap_or(Path::new("."));
+
+        Project::new_from_parsed_config(config, config_dir)
+    }
+
+    ///
+    /// Get the pep version in the config if it exists
+    /// otherwise return the default version
+    ///
+    pub fn get_pep_version(&self) -> &str {
+        self.config
+            .as_ref()
+            .map_or(consts::DEFAULT_PEP_VERSION, |cfg| &cfg.pep_version)
+    }
+
+    ///
+    /// Get the number of samples in the project
+    ///
+    pub fn len(&self) -> usize {
+        self.samples.height()
+    }
+
+    ///
+    /// Check if the project contains no samples
+    ///
+    pub fn is_empty(&self) -> bool {
+        self.samples.is_empty()
+    }
+
+    ///
+    /// Retrieve a sample by its sample name.
+    ///
+    pub fn get_sample<'a>(&'a self, name: &str) -> PolarsResult<Option<Sample<'a>>> {
+        let mask = self
+            .samples
+            .column(&self.sample_table_index)?
+            .as_series()
+            .ok_or_else(|| {
+                PolarsError::ColumnNotFound(
+                    format!(
+                        "Sample table index column '{}' not found",
+                        self.sample_table_index
+                    )
+                    .into(),
+                )
+            })?
+            .equal(name)?;
+
+        // find the index of the first `true` value in our mask.
+        // we can iterate through the mask and find the position of the first `Some(true)`.
+        if let Some(row_index) = mask.iter().position(|val| val == Some(true)) {
+            Ok(Some(Sample::from_dataframe_row(&self.samples, row_index)?))
+        } else {
+            // if no `true` values were in the mask, the sample was not found.
+            Ok(None)
+        }
+    }
+
+    ///
     /// Create new Project object after parsing the project config. This
     /// is an internal function to enable moer abstact wrappers
     ///
@@ -143,78 +215,6 @@ impl Project {
             samples: samples.unwrap_or(DataFrame::empty()),
             subsamples,
         })
-    }
-
-    ///
-    /// Create a new PEP project struct from a project configuration file
-    /// that is a physical file on disk.
-    ///
-    pub fn from_config<P>(path: P) -> Result<Self, Error>
-    where
-        P: AsRef<Path>,
-    {
-        // open configuration file and deserialize from yaml to struct
-        let config_file = File::open(&path)?;
-        let reader = BufReader::new(config_file);
-        let config: ProjectConfig = serde_yaml::from_reader(reader)?;
-
-        // exrtract out the directory of the config file
-        let config_dir = path.as_ref().parent().unwrap_or(Path::new("."));
-
-        Project::new_from_parsed_config(config, config_dir)
-    }
-
-    ///
-    /// Get the pep version in the config if it exists
-    /// otherwise return the default version
-    ///
-    pub fn get_pep_version(&self) -> &str {
-        self.config
-            .as_ref()
-            .map_or(consts::DEFAULT_PEP_VERSION, |cfg| &cfg.pep_version)
-    }
-
-    ///
-    /// Get the number of samples in the project
-    ///
-    pub fn len(&self) -> usize {
-        self.samples.height()
-    }
-
-    ///
-    /// Check if the project contains no samples
-    ///
-    pub fn is_empty(&self) -> bool {
-        self.samples.is_empty()
-    }
-
-    ///
-    /// Retrieve a sample by its sample name.
-    ///
-    pub fn get_sample<'a>(&'a self, name: &str) -> PolarsResult<Option<Sample<'a>>> {
-        let mask = self
-            .samples
-            .column(&self.sample_table_index)?
-            .as_series()
-            .ok_or_else(|| {
-                PolarsError::ColumnNotFound(
-                    format!(
-                        "Sample table index column '{}' not found",
-                        self.sample_table_index
-                    )
-                    .into(),
-                )
-            })?
-            .equal(name)?;
-
-        // find the index of the first `true` value in our mask.
-        // we can iterate through the mask and find the position of the first `Some(true)`.
-        if let Some(row_index) = mask.iter().position(|val| val == Some(true)) {
-            Ok(Some(Sample::from_dataframe_row(&self.samples, row_index)?))
-        } else {
-            // if no `true` values were in the mask, the sample was not found.
-            Ok(None)
-        }
     }
 
     ///
