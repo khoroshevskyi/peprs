@@ -328,7 +328,7 @@ mod tests {
         "../example-peps/example_basic/project_config.yaml"
     }
 
-        #[fixture]
+    #[fixture]
     fn new_st_index() -> &'static str {
         "../example-peps/example_new_st_index/project_config.yaml"
     }
@@ -396,14 +396,14 @@ mod tests {
 
         let proj = proj.unwrap();
         assert_eq!(proj.sample_table_index, "id");
-        
+
         let sample1 = proj.get_sample("frog_1");
         assert_eq!(sample1.is_ok(), true);
 
         let sample1 = sample1.unwrap();
         assert_eq!(sample1.is_some(), true);
     }
-    
+
     #[rstest]
     fn remove_pep_project(remove_pep: &'static str) {
         let proj = Project::from_config(remove_pep).build();
