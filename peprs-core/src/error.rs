@@ -26,6 +26,10 @@ pub enum Error {
     /// Polars error
     #[error("Polars error: {0}")]
     Polars(#[from] polars::error::PolarsError),
+
+    /// Not found amendment error
+    #[error("Amendment '{0}' not found in config")]
+    AmendmentNotFound(String),
 }
 
 /// Result type alias for convenience

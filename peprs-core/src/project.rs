@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::BufReader;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use polars::prelude::*;
 use serde_yaml;
@@ -11,12 +11,38 @@ use crate::error::Error;
 use crate::sample::{Sample, SamplesIter};
 use crate::utils::build_derive_template_expr;
 
+pub struct ProjectBuilder {
+    path: PathBuf,
+    amendments: Option<Vec<String>>,
+}
+
 pub struct Project {
     pub config: Option<ProjectConfig>,
     pub samples: DataFrame,
     pub subsamples: Option<Vec<DataFrame>>,
     pub sample_table_index: String,
 }
+
+impl ProjectBuilder {
+    ///
+    /// Specify a list of amendments to activate when building the project.
+    /// 
+    pub fn with_amendments(&mut self, amendments: &[String]) -> &mut Self {
+        self.amendments = Some(amendments.to_vec());
+        self
+    }
+
+    /// Construct the `Project` using the specified configuration.
+    ///
+    /// This is the final step that will perform file I/O and parsing.
+    pub fn build(self) -> Result<Project, Error> {
+        let config = Project::load_project_config(&self.path, self.amendments.as_deref())?;
+        let config_dir = self.path.parent().unwrap_or_else(|| Path::new("."));
+        Project::new_from_parsed_config(config, config_dir)
+    }
+}
+
+
 
 impl Project {
     ///
@@ -45,13 +71,17 @@ impl Project {
     /// Create a new PEP project struct from a project configuration file
     /// that is a physical file on disk.
     ///
-    pub fn from_config<P>(path: P) -> Result<Self, Error>
+    pub fn from_config<P>(path: P) -> ProjectBuilder
     where
         P: AsRef<Path> + Clone,
     {
-        let config = Self::load_project_config(path.clone())?;
-        let config_dir = path.as_ref().parent().unwrap_or(Path::new("."));
-        Project::new_from_parsed_config(config, config_dir)
+        // let config = Self::load_project_config(path.clone(), amendments)?;
+        // let config_dir = path.as_ref().parent().unwrap_or(Path::new("."));
+        // Project::new_from_parsed_config(config, config_dir)
+        ProjectBuilder {
+            path: path.as_ref().to_path_buf(),
+            amendments: None
+        }
     }
 
     ///
@@ -110,7 +140,7 @@ impl Project {
     ///
     /// The main entry point for loading the project configuration
     ///
-    pub fn load_project_config(path: impl AsRef<Path>) -> Result<ProjectConfig, Error> {
+    pub fn load_project_config(path: impl AsRef<Path>, amendments: Option<&[String]>) -> Result<ProjectConfig, Error> {
         let path = path.as_ref();
         let config_file = File::open(path)?;
         let reader = BufReader::new(config_file);
@@ -119,7 +149,7 @@ impl Project {
         // start the recursive parsing process, passing the parent dir for path resolution
         let parent_dir = path.parent().unwrap_or_else(|| Path::new(""));
 
-        Self::parse_and_apply_project_modifiers(config, parent_dir)
+        Self::parse_and_apply_project_modifiers(config, parent_dir, amendments)
     }
 
     ///
@@ -129,6 +159,7 @@ impl Project {
     fn parse_and_apply_project_modifiers(
         mut config: ProjectConfig,
         base_path: &Path,
+        amendments_to_activate: Option<&[String]>
     ) -> Result<ProjectConfig, Error> {
         // take the modifiers out, leaving None in their place to avoid re-processing.
         if let Some(modifiers) = config.project_modifiers.take() {
@@ -139,15 +170,25 @@ impl Project {
                     let import_path = base_path.join(import_path_str);
 
                     // recursively load and parse the imported config
-                    let imported_config = Self::load_project_config(&import_path)?;
+                    let imported_config = Self::load_project_config(&import_path, amendments_to_activate)?;
                     config = config.with_merge(imported_config);
                 }
             }
 
-            // handle amendments second (they override the imports and the base)
-            if let Some(amendments) = modifiers.amend {
-                for amendment_variant in amendments.values() {
-                    config = config.with_amendment(amendment_variant.to_owned());
+            // check if there amendments in the actual config file, and then
+            // check if the user passed amendments to activate
+            if let (Some(defined_amendments), Some(active_amendments)) =
+                (modifiers.amend, amendments_to_activate)
+            {
+                // iterate through the NAMES of the amendments the user wants to activate
+                for name_to_activate in active_amendments {
+                    if let Some(amendment_variant) = defined_amendments.get(name_to_activate) {
+                        // if found, apply it
+                        config = config.with_amendment(amendment_variant.clone());
+                    } else {
+                        // if not found, return an error
+                        return Err(Error::AmendmentNotFound(name_to_activate.to_string()));
+                    }
                 }
             }
         }
@@ -323,13 +364,13 @@ mod tests {
 
     #[rstest]
     fn basic_pep_project(basic_pep: &'static str) {
-        let proj = Project::from_config(basic_pep);
+        let proj = Project::from_config(basic_pep).build();
         assert_eq!(proj.is_ok(), true);
     }
 
     #[rstest]
     fn remove_pep_project(remove_pep: &'static str) {
-        let proj = Project::from_config(remove_pep);
+        let proj = Project::from_config(remove_pep).build();
         assert_eq!(proj.is_ok(), true);
 
         let samples = proj.unwrap().samples;
@@ -339,7 +380,7 @@ mod tests {
 
     #[rstest]
     fn duplicate_pep_project(duplicate_pep: &'static str) {
-        let proj = Project::from_config(duplicate_pep);
+        let proj = Project::from_config(duplicate_pep).build();
         assert_eq!(proj.is_ok(), true);
 
         let samples = proj.unwrap().samples;
@@ -349,7 +390,7 @@ mod tests {
 
     #[rstest]
     fn append_pep_project(append_pep: &'static str) {
-        let proj = Project::from_config(append_pep);
+        let proj = Project::from_config(append_pep).build();
         assert_eq!(proj.is_ok(), true);
 
         let samples = proj.unwrap().samples;
@@ -359,7 +400,7 @@ mod tests {
 
     #[rstest]
     fn imply_pep_project(imply_pep: &'static str) {
-        let proj = Project::from_config(imply_pep);
+        let proj = Project::from_config(imply_pep).build();
         // let proj = proj.unwrap();
         assert_eq!(proj.is_ok(), true);
 
@@ -368,13 +409,13 @@ mod tests {
 
     #[rstest]
     fn derive_pep_project(derive_pep: &'static str) {
-        let proj = Project::from_config(derive_pep);
+        let proj = Project::from_config(derive_pep).build();
         assert_eq!(proj.is_ok(), true);
     }
 
     #[rstest]
     fn import_pep_project(import_pep: &'static str) {
-        let proj = Project::from_config(import_pep);
+        let proj = Project::from_config(import_pep).build();
         assert_eq!(proj.is_ok(), true);
         assert_eq!(
             proj.unwrap().samples.get_column_names_str(),
@@ -384,7 +425,7 @@ mod tests {
 
     #[rstest]
     fn get_sample_from_pep(basic_pep: &'static str) {
-        let proj = Project::from_config(basic_pep);
+        let proj = Project::from_config(basic_pep).build();
         assert_eq!(proj.is_ok(), true);
 
         let proj = proj.unwrap();
@@ -405,7 +446,7 @@ mod tests {
 
     #[rstest]
     fn iterate_samples(basic_pep: &'static str) {
-        let proj = Project::from_config(basic_pep);
+        let proj = Project::from_config(basic_pep).build();
         assert_eq!(proj.is_ok(), true);
 
         let proj = proj.unwrap();
@@ -416,7 +457,7 @@ mod tests {
 
     #[rstest]
     fn iterate_samples_get_values(basic_pep: &'static str) {
-        let proj = Project::from_config(basic_pep);
+        let proj = Project::from_config(basic_pep).build();
         assert_eq!(proj.is_ok(), true);
 
         let proj = proj.unwrap();
