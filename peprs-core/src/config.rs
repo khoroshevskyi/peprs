@@ -72,38 +72,61 @@ pub struct AmendVariant {
     pub project_modifiers: Option<ProjectModifiers>,
 }
 
-
 impl ProjectConfig {
     ///
     /// Apply an amendment to the project configuration
     /// given an amend variant
-    /// 
+    ///
     pub fn with_amendment(mut self, amendment: AmendVariant) -> Self {
-        if let Some(val) = amendment.sample_table { self.sample_table = Some(val); }
-        if let Some(val) = amendment.subsample_table { self.subsample_table = Some(val); }
-        if let Some(val) = amendment.sample_table_index { self.sample_table_index = Some(val); }
-        if let Some(val) = amendment.subsample_table_index { self.subsample_table_index = Some(val); }
-        if let Some(val) = amendment.sample_modifiers { self.sample_modifiers = Some(val); }
-        if let Some(val) = amendment.project_modifiers { self.project_modifiers = Some(val); }
-        
+        if let Some(val) = amendment.sample_table {
+            self.sample_table = Some(val);
+        }
+        if let Some(val) = amendment.subsample_table {
+            self.subsample_table = Some(val);
+        }
+        if let Some(val) = amendment.sample_table_index {
+            self.sample_table_index = Some(val);
+        }
+        if let Some(val) = amendment.subsample_table_index {
+            self.subsample_table_index = Some(val);
+        }
+        if let Some(val) = amendment.sample_modifiers {
+            self.sample_modifiers = Some(val);
+        }
+        if let Some(val) = amendment.project_modifiers {
+            self.project_modifiers = Some(val);
+        }
+
         self
     }
-    
+
     ///
     /// Merge the current project configuration with another one. This
     /// is useful for import project modifiers
-    /// 
+    ///
     pub fn with_merge(mut self, other: ProjectConfig) -> Self {
         // the `pep_version` is a required field, so we always take the value from `other`.
         self.pep_version = other.pep_version;
 
         // for all optional fields, we only overwrite if `other` has a value.
-        if other.sample_table.is_some() { self.sample_table = other.sample_table; }
-        if other.subsample_table.is_some() { self.subsample_table = other.subsample_table; }
-        if other.sample_table_index.is_some() { self.sample_table_index = other.sample_table_index; }
-        if other.subsample_table_index.is_some() { self.subsample_table_index = other.subsample_table_index; }
-        if other.sample_modifiers.is_some() { self.sample_modifiers = other.sample_modifiers; }
-        if other.project_modifiers.is_some() { self.project_modifiers = other.project_modifiers; }
+        if other.sample_table.is_some() {
+            self.sample_table = other.sample_table;
+        }
+        if other.subsample_table.is_some() {
+            self.subsample_table = other.subsample_table;
+        }
+        if other.sample_table_index.is_some() {
+            self.sample_table_index = other.sample_table_index;
+        }
+        if other.subsample_table_index.is_some() {
+            self.subsample_table_index = other.subsample_table_index;
+        }
+        if other.sample_modifiers.is_some() {
+            self.sample_modifiers = other.sample_modifiers;
+        }
+        if other.project_modifiers.is_some() {
+            self.project_modifiers = other.project_modifiers;
+        }
 
         self
     }
