@@ -27,7 +27,7 @@ impl ProjectBuilder {
     ///
     /// Specify a list of amendments to activate when building the project.
     /// 
-    pub fn with_amendments(&mut self, amendments: &[String]) -> &mut Self {
+    pub fn with_amendments(mut self, amendments: &[String]) -> Self {
         self.amendments = Some(amendments.to_vec());
         self
     }
@@ -356,6 +356,11 @@ mod tests {
         "../example-peps/example_imports/project_config.yaml"
     }
 
+    #[fixture]
+    fn amendments1_pep() -> &'static str {
+        "../example-peps/example_amendments1/project_config.yaml"
+    }
+
     #[rstest]
     fn pep_from_csv(basic_csv: &'static str) {
         let proj = Project::from_csv(basic_csv);
@@ -421,6 +426,45 @@ mod tests {
             proj.unwrap().samples.get_column_names_str(),
             vec!["sample_name", "protocol", "file", "imported_attr"]
         );
+    }
+
+
+    #[rstest]
+    fn import_amendments1_pep(amendments1_pep: &'static str) {
+        let proj = Project::from_config(amendments1_pep)
+            .with_amendments(&["newLib".to_string()])
+            .build();
+
+        assert_eq!(proj.is_ok(), true);
+        let correct_vals = vec!["ABCD", "ABCD", "ABCD", "ABCD"];
+        let proj = proj.unwrap();
+        let protocol_values = proj
+            .samples
+            .column("protocol")
+            .unwrap()
+            .str()
+            .unwrap()
+            .into_no_null_iter()
+            .collect::<Vec<_>>();
+        assert_eq!(protocol_values, correct_vals);
+
+        // do it again, but without an amendment
+        let proj = Project::from_config(amendments1_pep)
+            .build();
+
+        assert_eq!(proj.is_ok(), true);
+        
+        let correct_vals = vec!["RRBS", "RRBS", "RRBS", "RRBS"];
+        let proj = proj.unwrap();
+        let protocol_values = proj
+            .samples
+            .column("protocol")
+            .unwrap()
+            .str()
+            .unwrap()
+            .into_no_null_iter()
+            .collect::<Vec<_>>();
+        assert_eq!(protocol_values, correct_vals);
     }
 
     #[rstest]
