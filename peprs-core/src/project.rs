@@ -26,7 +26,7 @@ pub struct Project {
 impl ProjectBuilder {
     ///
     /// Specify a list of amendments to activate when building the project.
-    /// 
+    ///
     pub fn with_amendments(mut self, amendments: &[String]) -> Self {
         self.amendments = Some(amendments.to_vec());
         self
@@ -41,8 +41,6 @@ impl ProjectBuilder {
         Project::new_from_parsed_config(config, config_dir)
     }
 }
-
-
 
 impl Project {
     ///
@@ -80,7 +78,7 @@ impl Project {
         // Project::new_from_parsed_config(config, config_dir)
         ProjectBuilder {
             path: path.as_ref().to_path_buf(),
-            amendments: None
+            amendments: None,
         }
     }
 
@@ -140,7 +138,10 @@ impl Project {
     ///
     /// The main entry point for loading the project configuration
     ///
-    pub fn load_project_config(path: impl AsRef<Path>, amendments: Option<&[String]>) -> Result<ProjectConfig, Error> {
+    pub fn load_project_config(
+        path: impl AsRef<Path>,
+        amendments: Option<&[String]>,
+    ) -> Result<ProjectConfig, Error> {
         let path = path.as_ref();
         let config_file = File::open(path)?;
         let reader = BufReader::new(config_file);
@@ -159,7 +160,7 @@ impl Project {
     fn parse_and_apply_project_modifiers(
         mut config: ProjectConfig,
         base_path: &Path,
-        amendments_to_activate: Option<&[String]>
+        amendments_to_activate: Option<&[String]>,
     ) -> Result<ProjectConfig, Error> {
         // take the modifiers out, leaving None in their place to avoid re-processing.
         if let Some(modifiers) = config.project_modifiers.take() {
@@ -170,7 +171,8 @@ impl Project {
                     let import_path = base_path.join(import_path_str);
 
                     // recursively load and parse the imported config
-                    let imported_config = Self::load_project_config(&import_path, amendments_to_activate)?;
+                    let imported_config =
+                        Self::load_project_config(&import_path, amendments_to_activate)?;
                     config = config.with_merge(imported_config);
                 }
             }
@@ -326,6 +328,11 @@ mod tests {
         "../example-peps/example_basic/project_config.yaml"
     }
 
+        #[fixture]
+    fn new_st_index() -> &'static str {
+        "../example-peps/example_new_st_index/project_config.yaml"
+    }
+
     #[fixture]
     fn remove_pep() -> &'static str {
         "../example-peps/example_remove/project_config.yaml"
@@ -368,11 +375,35 @@ mod tests {
     }
 
     #[rstest]
-    fn basic_pep_project(basic_pep: &'static str) {
-        let proj = Project::from_config(basic_pep).build();
+    #[case("../example-peps/example_basic/project_config.yaml")]
+    #[case("../example-peps/example_new_st_index/project_config.yaml")]
+    #[case("../example-peps/example_remove/project_config.yaml")]
+    #[case("../example-peps/example_duplicate/project_config.yaml")]
+    #[case("../example-peps/example_append/project_config.yaml")]
+    #[case("../example-peps/example_imply/project_config.yaml")]
+    #[case("../example-peps/example_derive/project_config.yaml")]
+    #[case("../example-peps/example_imports/project_config.yaml")]
+    #[case("../example-peps/example_amendments1/project_config.yaml")]
+    fn instantiate_pep(#[case] cfg_path: &'static str) {
+        let proj = Project::from_config(cfg_path).build();
         assert_eq!(proj.is_ok(), true);
     }
 
+    #[rstest]
+    fn test_new_st_index(new_st_index: &'static str) {
+        let proj = Project::from_config(new_st_index).build();
+        assert_eq!(proj.is_ok(), true);
+
+        let proj = proj.unwrap();
+        assert_eq!(proj.sample_table_index, "id");
+        
+        let sample1 = proj.get_sample("frog_1");
+        assert_eq!(sample1.is_ok(), true);
+
+        let sample1 = sample1.unwrap();
+        assert_eq!(sample1.is_some(), true);
+    }
+    
     #[rstest]
     fn remove_pep_project(remove_pep: &'static str) {
         let proj = Project::from_config(remove_pep).build();
@@ -416,6 +447,8 @@ mod tests {
     fn derive_pep_project(derive_pep: &'static str) {
         let proj = Project::from_config(derive_pep).build();
         assert_eq!(proj.is_ok(), true);
+
+        // TODO: test that the derive attribute actually worked
     }
 
     #[rstest]
@@ -427,7 +460,6 @@ mod tests {
             vec!["sample_name", "protocol", "file", "imported_attr"]
         );
     }
-
 
     #[rstest]
     fn import_amendments1_pep(amendments1_pep: &'static str) {
@@ -449,11 +481,10 @@ mod tests {
         assert_eq!(protocol_values, correct_vals);
 
         // do it again, but without an amendment
-        let proj = Project::from_config(amendments1_pep)
-            .build();
+        let proj = Project::from_config(amendments1_pep).build();
 
         assert_eq!(proj.is_ok(), true);
-        
+
         let correct_vals = vec!["RRBS", "RRBS", "RRBS", "RRBS"];
         let proj = proj.unwrap();
         let protocol_values = proj
