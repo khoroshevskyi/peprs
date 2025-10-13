@@ -54,9 +54,12 @@ impl Project {
         let subsamples = None;
         let samples = LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
             .with_has_header(true)
+            .with_infer_schema_length(Some(10_000))
             .finish()?
             // .group_by([col(DEFAULT_SAMPLE_TABLE_INDEX)])
             // .agg([col("*")])
+            // coerce the sample table index into a string
+            .with_column(col(DEFAULT_SAMPLE_TABLE_INDEX).cast(DataType::String))
             .collect()?;
 
         Ok(Self {
@@ -197,7 +200,6 @@ impl Project {
             }
         }
 
-        // Return the fully processed config
         Ok(config)
     }
 
@@ -224,11 +226,14 @@ impl Project {
                     LazyCsvReader::new(PlPath::new(sample_table_path.to_str().unwrap()))
                         .with_has_header(true)
                         .with_infer_schema_length(Some(10_000))
-                        .finish()?, // TODO: merge duplicate sample names
+                        .finish()? // TODO: merge duplicate sample names
+                        // coerce the sample table index into a string
+                        .with_column(col(sample_table_index).cast(DataType::String))
                 )
             }
             None => None,
         };
+        
 
         let subsamples = match &config.subsample_table {
             // TODO: implement subsample table logic
@@ -292,10 +297,6 @@ impl Project {
         }
 
         // finally, collect the lazy frame
-        let _st_index = config
-            .sample_table_index
-            .clone()
-            .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX.to_string());
         let samples = match samples_lf {
             Some(lf) => Some(lf.collect()?),
             None => None,
