@@ -14,6 +14,7 @@ impl std::convert::From<PeprsCoreError> for pyo3::PyErr {
             peprs_core::error::Error::Polars(polars_error) => {
                 PyRuntimeError::new_err(format!("Polars error occured: {}", polars_error))
             }
+            peprs_core::error::Error::AmendmentNotFound(error) => PyValueError::new_err(error),
         }
     }
 }

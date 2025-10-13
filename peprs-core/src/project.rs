@@ -1,20 +1,45 @@
 use std::fs::File;
 use std::io::BufReader;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use polars::prelude::*;
 use serde_yaml;
 
-use crate::config::ProjectConfig;
+use crate::config::{ImplyCondition, ProjectConfig};
 use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX};
 use crate::error::Error;
 use crate::sample::{Sample, SamplesIter};
+use crate::utils::build_derive_template_expr;
+
+pub struct ProjectBuilder {
+    path: PathBuf,
+    amendments: Option<Vec<String>>,
+}
 
 pub struct Project {
     pub config: Option<ProjectConfig>,
     pub samples: DataFrame,
     pub subsamples: Option<Vec<DataFrame>>,
     pub sample_table_index: String,
+}
+
+impl ProjectBuilder {
+    ///
+    /// Specify a list of amendments to activate when building the project.
+    ///
+    pub fn with_amendments(mut self, amendments: &[String]) -> Self {
+        self.amendments = Some(amendments.to_vec());
+        self
+    }
+
+    /// Construct the `Project` using the specified configuration.
+    ///
+    /// This is the final step that will perform file I/O and parsing.
+    pub fn build(self) -> Result<Project, Error> {
+        let config = Project::load_project_config(&self.path, self.amendments.as_deref())?;
+        let config_dir = self.path.parent().unwrap_or_else(|| Path::new("."));
+        Project::new_from_parsed_config(config, config_dir)
+    }
 }
 
 impl Project {
@@ -30,6 +55,8 @@ impl Project {
         let samples = LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
             .with_has_header(true)
             .finish()?
+            // .group_by([col(DEFAULT_SAMPLE_TABLE_INDEX)])
+            // .agg([col("*")])
             .collect()?;
 
         Ok(Self {
@@ -41,126 +68,20 @@ impl Project {
     }
 
     ///
-    /// Create new Project object after parsing the project config. This
-    /// is an internal function to enable moer abstact wrappers
-    ///
-    fn new_from_parsed_config<P>(config: ProjectConfig, config_dir: P) -> Result<Self, Error>
-    where
-        P: AsRef<Path>,
-    {
-        let sample_table_index = config
-            .sample_table_index
-            .as_deref()
-            .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX);
-
-        // read in the sample table if it exists
-        // if the user has specified a sample table, read it in
-        // assuming its in the same directory as the project config file.
-        let mut samples_lf = match &config.sample_table {
-            Some(sample_table) => {
-                let sample_table_path = config_dir.as_ref().join(sample_table);
-                Some(
-                    LazyCsvReader::new(PlPath::new(sample_table_path.to_str().unwrap()))
-                        .with_has_header(true)
-                        .finish()?, // TODO: merge duplicate sample names
-                )
-            }
-            None => None,
-        };
-
-        let subsamples = match &config.subsample_table {
-            // TODO: implement subsample table logic
-            Some(_subsample_table) => None,
-            None => None,
-        };
-
-        // apply modifiers if they exist and if there is a sample table
-        #[allow(clippy::collapsible_if)]
-        if let Some(modifiers) = &config.sample_modifiers {
-            // make sure they passed a sample table at all
-            if let Some(lf) = samples_lf.take() {
-                let mut new_lf = lf;
-
-                // REMOVE
-                if let Some(cols_to_remove) = &modifiers.remove {
-                    new_lf = new_lf.drop(cols(cols_to_remove));
-                }
-
-                // DUPLICATE
-                if let Some(duplicate_map) = &modifiers.duplicate {
-                    for (old_attribute_name, new_attribute_name) in duplicate_map {
-                        new_lf =
-                            new_lf.with_column(col(old_attribute_name).alias(new_attribute_name));
-                    }
-                }
-
-                // APPEND
-                if let Some(append_map) = &modifiers.append {
-                    for (new_col_name, value) in append_map {
-                        new_lf = new_lf.with_column(lit(value.to_string()).alias(new_col_name))
-                    }
-                }
-
-                // IMPLY
-                // if let Some(imply_rules) = &modifiers.imply {
-                //     for imply_rule in imply_rules {
-                //         new_lf = new_lf.with_column(
-                //             coalesce(
-                //         imply_rule
-                //                 .if_condition
-                //                 .iter()
-                //                 .map(|(attribute, condition)| {
-                //                     match condition {
-                //                         ImplyCondition::Single(c) => {
-                //                            when(col(attribute).eq(lit(c.to_string())))
-                //                         }
-                //                         ImplyCondition::Multiple(c) => {
-                //                             when(col(attribute).is_in(c, false))
-                //                         }
-                //                     }
-                //                 })
-                //                 .collect()
-                //             )
-                //         )
-                //     }
-                // }
-
-                // after all potential modifications, re-assign
-                samples_lf = Some(new_lf)
-            }
-        }
-
-        // finally, collect the lazy frame
-        let samples = match samples_lf {
-            Some(lf) => Some(lf.collect()?),
-            None => None,
-        };
-
-        Ok(Self {
-            sample_table_index: sample_table_index.to_owned(),
-            config: Some(config),
-            samples: samples.unwrap_or(DataFrame::empty()),
-            subsamples,
-        })
-    }
-
-    ///
     /// Create a new PEP project struct from a project configuration file
     /// that is a physical file on disk.
     ///
-    pub fn from_config<P>(path: P) -> Result<Self, Error>
+    pub fn from_config<P>(path: P) -> ProjectBuilder
     where
-        P: AsRef<Path>,
+        P: AsRef<Path> + Clone,
     {
-        // open configuration file and deserialize from yaml to struct
-        let config_file = File::open(&path)?;
-        let reader = BufReader::new(config_file);
-        let config: ProjectConfig = serde_yaml::from_reader(reader)?;
-
-        // exrtract out the directory of the config file
-        let config_dir = path.as_ref().parent().unwrap_or(Path::new("."));
-
-        Project::new_from_parsed_config(config, config_dir)
+        // let config = Self::load_project_config(path.clone(), amendments)?;
+        // let config_dir = path.as_ref().parent().unwrap_or(Path::new("."));
+        // Project::new_from_parsed_config(config, config_dir)
+        ProjectBuilder {
+            path: path.as_ref().to_path_buf(),
+            amendments: None,
+        }
     }
 
     ///
@@ -217,6 +138,178 @@ impl Project {
     }
 
     ///
+    /// The main entry point for loading the project configuration
+    ///
+    pub fn load_project_config(
+        path: impl AsRef<Path>,
+        amendments: Option<&[String]>,
+    ) -> Result<ProjectConfig, Error> {
+        let path = path.as_ref();
+        let config_file = File::open(path)?;
+        let reader = BufReader::new(config_file);
+        let config: ProjectConfig = serde_yaml::from_reader(reader)?;
+
+        // start the recursive parsing process, passing the parent dir for path resolution
+        let parent_dir = path.parent().unwrap_or_else(|| Path::new(""));
+
+        Self::parse_and_apply_project_modifiers(config, parent_dir, amendments)
+    }
+
+    ///
+    /// Recursive helper function that consumes and returns a config
+    /// after applying and potential project modifiers
+    ///
+    fn parse_and_apply_project_modifiers(
+        mut config: ProjectConfig,
+        base_path: &Path,
+        amendments_to_activate: Option<&[String]>,
+    ) -> Result<ProjectConfig, Error> {
+        // take the modifiers out, leaving None in their place to avoid re-processing.
+        if let Some(modifiers) = config.project_modifiers.take() {
+            // handle imports first (they are the base)
+            if let Some(import_paths) = modifiers.import {
+                for import_path_str in import_paths {
+                    // resolve the path relative to the current config's directory
+                    let import_path = base_path.join(import_path_str);
+
+                    // recursively load and parse the imported config
+                    let imported_config =
+                        Self::load_project_config(&import_path, amendments_to_activate)?;
+                    config = config.with_merge(imported_config);
+                }
+            }
+
+            // check if there amendments in the actual config file, and then
+            // check if the user passed amendments to activate
+            if let (Some(defined_amendments), Some(active_amendments)) =
+                (modifiers.amend, amendments_to_activate)
+            {
+                // iterate through the NAMES of the amendments the user wants to activate
+                for name_to_activate in active_amendments {
+                    if let Some(amendment_variant) = defined_amendments.get(name_to_activate) {
+                        // if found, apply it
+                        config = config.with_amendment(amendment_variant.clone());
+                    } else {
+                        // if not found, return an error
+                        return Err(Error::AmendmentNotFound(name_to_activate.to_string()));
+                    }
+                }
+            }
+        }
+
+        // Return the fully processed config
+        Ok(config)
+    }
+
+    ///
+    /// Create new Project object after parsing the project config. This
+    /// is an internal function to enable moer abstact wrappers
+    ///
+    fn new_from_parsed_config<P>(config: ProjectConfig, config_dir: P) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+    {
+        let sample_table_index = config
+            .sample_table_index
+            .as_deref()
+            .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX);
+
+        // read in the sample table if it exists
+        // if the user has specified a sample table, read it in
+        // assuming its in the same directory as the project config file.
+        let mut samples_lf = match &config.sample_table {
+            Some(sample_table) => {
+                let sample_table_path = config_dir.as_ref().join(sample_table);
+                Some(
+                    LazyCsvReader::new(PlPath::new(sample_table_path.to_str().unwrap()))
+                        .with_has_header(true)
+                        .with_infer_schema_length(Some(10_000))
+                        .finish()?, // TODO: merge duplicate sample names
+                )
+            }
+            None => None,
+        };
+
+        let subsamples = match &config.subsample_table {
+            // TODO: implement subsample table logic
+            Some(_subsample_table) => None,
+            None => None,
+        };
+
+        // apply modifiers if they exist and if there is a sample table
+        #[allow(clippy::collapsible_if)]
+        if let Some(modifiers) = &config.sample_modifiers {
+            // make sure they passed a sample table at all
+            if let Some(lf) = samples_lf.take() {
+                let mut new_lf = lf;
+
+                // REMOVE
+                if let Some(cols_to_remove) = &modifiers.remove {
+                    new_lf = new_lf.drop(cols(cols_to_remove));
+                }
+
+                // DUPLICATE
+                if let Some(duplicate_map) = &modifiers.duplicate {
+                    for (old_attribute_name, new_attribute_name) in duplicate_map {
+                        new_lf =
+                            new_lf.with_column(col(old_attribute_name).alias(new_attribute_name));
+                    }
+                }
+
+                // APPEND
+                if let Some(append_map) = &modifiers.append {
+                    for (new_col_name, value) in append_map {
+                        new_lf = new_lf.with_column(lit(value.to_string()).alias(new_col_name))
+                    }
+                }
+
+                // IMPLY
+                if let Some(imply_rules) = &modifiers.imply {}
+
+                // DERIVE
+                if let Some(derive_rule) = &modifiers.derive {
+                    for col_to_derive in &derive_rule.attributes {
+                        // start with the original column as the final "else" case
+                        let mut final_expr = col(col_to_derive);
+
+                        // chain a when-then for each source template
+                        for (key, template) in &derive_rule.sources {
+                            let template_expr = build_derive_template_expr(template)?;
+
+                            final_expr = when(col(col_to_derive).eq(lit(key.clone())))
+                                .then(template_expr)
+                                .otherwise(final_expr);
+                        }
+
+                        // apply the chained expression to the DataFrame
+                        new_lf = new_lf.with_column(final_expr.alias(col_to_derive));
+                    }
+                }
+
+                // after all potential modifications, re-assign
+                samples_lf = Some(new_lf)
+            }
+        }
+
+        // finally, collect the lazy frame
+        let _st_index = config
+            .sample_table_index
+            .clone()
+            .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX.to_string());
+        let samples = match samples_lf {
+            Some(lf) => Some(lf.collect()?),
+            None => None,
+        };
+
+        Ok(Self {
+            sample_table_index: sample_table_index.to_owned(),
+            config: Some(config),
+            samples: samples.unwrap_or(DataFrame::empty()),
+            subsamples,
+        })
+    }
+
+    ///
     /// Iterate over the samples in the project
     ///
     pub fn iter_samples(&'_ self) -> SamplesIter<'_> {
@@ -242,6 +335,11 @@ mod tests {
     }
 
     #[fixture]
+    fn new_st_index() -> &'static str {
+        "../example-peps/example_new_st_index/project_config.yaml"
+    }
+
+    #[fixture]
     fn remove_pep() -> &'static str {
         "../example-peps/example_remove/project_config.yaml"
     }
@@ -256,6 +354,26 @@ mod tests {
         "../example-peps/example_append/project_config.yaml"
     }
 
+    #[fixture]
+    fn imply_pep() -> &'static str {
+        "../example-peps/example_imply/project_config.yaml"
+    }
+
+    #[fixture]
+    fn derive_pep() -> &'static str {
+        "../example-peps/example_derive/project_config.yaml"
+    }
+
+    #[fixture]
+    fn import_pep() -> &'static str {
+        "../example-peps/example_imports/project_config.yaml"
+    }
+
+    #[fixture]
+    fn amendments1_pep() -> &'static str {
+        "../example-peps/example_amendments1/project_config.yaml"
+    }
+
     #[rstest]
     fn pep_from_csv(basic_csv: &'static str) {
         let proj = Project::from_csv(basic_csv);
@@ -263,14 +381,40 @@ mod tests {
     }
 
     #[rstest]
-    fn basic_pep_project(basic_pep: &'static str) {
-        let proj = Project::from_config(basic_pep);
+    #[case("../example-peps/example_basic/project_config.yaml")]
+    #[case("../example-peps/example_new_st_index/project_config.yaml")]
+    #[case("../example-peps/example_remove/project_config.yaml")]
+    #[case("../example-peps/example_duplicate/project_config.yaml")]
+    #[case("../example-peps/example_append/project_config.yaml")]
+    #[case("../example-peps/example_imply/project_config.yaml")]
+    #[case("../example-peps/example_derive/project_config.yaml")]
+    #[case("../example-peps/example_imports/project_config.yaml")]
+    #[case("../example-peps/example_amendments1/project_config.yaml")]
+    fn instantiate_pep(#[case] cfg_path: &'static str) {
+        let proj = Project::from_config(cfg_path).build();
+        let proj = proj.unwrap();
+        println!("{:?}", proj.samples);
+        // assert_eq!(proj.is_ok(), true);
+    }
+
+    #[rstest]
+    fn test_new_st_index(new_st_index: &'static str) {
+        let proj = Project::from_config(new_st_index).build();
         assert_eq!(proj.is_ok(), true);
+
+        let proj = proj.unwrap();
+        assert_eq!(proj.sample_table_index, "id");
+
+        let sample1 = proj.get_sample("frog_1");
+        assert_eq!(sample1.is_ok(), true);
+
+        let sample1 = sample1.unwrap();
+        assert_eq!(sample1.is_some(), true);
     }
 
     #[rstest]
     fn remove_pep_project(remove_pep: &'static str) {
-        let proj = Project::from_config(remove_pep);
+        let proj = Project::from_config(remove_pep).build();
         assert_eq!(proj.is_ok(), true);
 
         let samples = proj.unwrap().samples;
@@ -280,7 +424,7 @@ mod tests {
 
     #[rstest]
     fn duplicate_pep_project(duplicate_pep: &'static str) {
-        let proj = Project::from_config(duplicate_pep);
+        let proj = Project::from_config(duplicate_pep).build();
         assert_eq!(proj.is_ok(), true);
 
         let samples = proj.unwrap().samples;
@@ -290,7 +434,7 @@ mod tests {
 
     #[rstest]
     fn append_pep_project(append_pep: &'static str) {
-        let proj = Project::from_config(append_pep);
+        let proj = Project::from_config(append_pep).build();
         assert_eq!(proj.is_ok(), true);
 
         let samples = proj.unwrap().samples;
@@ -299,8 +443,93 @@ mod tests {
     }
 
     #[rstest]
+    fn imply_pep_project(imply_pep: &'static str) {
+        let proj = Project::from_config(imply_pep).build();
+        // let proj = proj.unwrap();
+        assert_eq!(proj.is_ok(), true);
+
+        println!("{:?}", proj.unwrap().samples);
+    }
+
+    #[rstest]
+    fn derive_pep_project(derive_pep: &'static str) {
+        let proj = Project::from_config(derive_pep).build();
+        assert_eq!(proj.is_ok(), true);
+
+        let correct_vals = vec![
+            format!(
+                "{}/data/lab/project/pig_0h.fastq",
+                std::env::var("HOME").unwrap()
+            ),
+            format!(
+                "{}/data/lab/project/pig_1h.fastq",
+                std::env::var("HOME").unwrap()
+            ),
+            "/path/from/collaborator/weirdNamingScheme_id_003.fastq".to_string(),
+            "/path/from/collaborator/weirdNamingScheme_id_004.fastq".to_string(),
+        ];
+        let proj = proj.unwrap();
+        let protocol_values = proj
+            .samples
+            .column("file_path")
+            .unwrap()
+            .str()
+            .unwrap()
+            .into_no_null_iter()
+            .collect::<Vec<_>>();
+        assert_eq!(protocol_values, correct_vals);
+    }
+
+    #[rstest]
+    fn import_pep_project(import_pep: &'static str) {
+        let proj = Project::from_config(import_pep).build();
+        assert_eq!(proj.is_ok(), true);
+        assert_eq!(
+            proj.unwrap().samples.get_column_names_str(),
+            vec!["sample_name", "protocol", "file", "imported_attr"]
+        );
+    }
+
+    #[rstest]
+    fn import_amendments1_pep(amendments1_pep: &'static str) {
+        let proj = Project::from_config(amendments1_pep)
+            .with_amendments(&["newLib".to_string()])
+            .build();
+
+        assert_eq!(proj.is_ok(), true);
+        let correct_vals = vec!["ABCD", "ABCD", "ABCD", "ABCD"];
+        let proj = proj.unwrap();
+        let protocol_values = proj
+            .samples
+            .column("protocol")
+            .unwrap()
+            .str()
+            .unwrap()
+            .into_no_null_iter()
+            .collect::<Vec<_>>();
+        assert_eq!(protocol_values, correct_vals);
+
+        // do it again, but without an amendment
+        let proj = Project::from_config(amendments1_pep).build();
+
+        assert_eq!(proj.is_ok(), true);
+
+        let correct_vals = vec!["RRBS", "RRBS", "RRBS", "RRBS"];
+        let proj = proj.unwrap();
+        let protocol_values = proj
+            .samples
+            .column("protocol")
+            .unwrap()
+            .str()
+            .unwrap()
+            .into_no_null_iter()
+            .collect::<Vec<_>>();
+        assert_eq!(protocol_values, correct_vals);
+    }
+
+    #[rstest]
     fn get_sample_from_pep(basic_pep: &'static str) {
-        let proj = Project::from_config(basic_pep);
+        let proj = Project::from_config(basic_pep).build();
         assert_eq!(proj.is_ok(), true);
 
         let proj = proj.unwrap();
@@ -321,7 +550,7 @@ mod tests {
 
     #[rstest]
     fn iterate_samples(basic_pep: &'static str) {
-        let proj = Project::from_config(basic_pep);
+        let proj = Project::from_config(basic_pep).build();
         assert_eq!(proj.is_ok(), true);
 
         let proj = proj.unwrap();
@@ -332,7 +561,7 @@ mod tests {
 
     #[rstest]
     fn iterate_samples_get_values(basic_pep: &'static str) {
-        let proj = Project::from_config(basic_pep);
+        let proj = Project::from_config(basic_pep).build();
         assert_eq!(proj.is_ok(), true);
 
         let proj = proj.unwrap();

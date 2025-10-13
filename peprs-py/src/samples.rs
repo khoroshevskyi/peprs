@@ -40,4 +40,9 @@ impl PySamplesIter {
             Err(e) => Err(PyRuntimeError::new_err(e.to_string())),
         }
     }
+
+    fn __len__(&self, py: Python) -> usize {
+        let project = self.project.borrow(py);
+        project.inner.samples.height()
+    }
 }

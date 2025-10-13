@@ -3,5 +3,6 @@ resolver = "3"
 edition = "2024"
 members = [
     "peprs-core",
-    "peprs-py"
+    "peprs-py",
+    "peprs-cli",
 ]

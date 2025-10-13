@@ -18,7 +18,7 @@ impl PyProject {
     pub fn py_new(path: String) -> Result<Self, PeprsCoreError> {
         // if yaml file, assume config
         if path.ends_with(".yaml") || path.ends_with(".yml") {
-            let inner = Project::from_config(&path)?;
+            let inner = Project::from_config(&path).build()?;
             Ok(PyProject { inner })
         } else if path.ends_with(".csv") {
             let inner = Project::from_csv(&path)?;
