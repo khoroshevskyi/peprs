@@ -18,6 +18,7 @@ def benchmark_peprs(pep_path: str):
     return proj
 
 PATH = "/Users/nathanleroy/Desktop/databio-bedbase_raw-default/bedbase_raw_config.yaml"
+PATH = "/Users/nathanleroy/Desktop/databio-bedbase_raw-default/sample_table.csv"
 
 benchmark_peppy(PATH)
 benchmark_peprs(PATH)

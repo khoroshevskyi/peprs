@@ -36,6 +36,7 @@ impl PyProject {
     }
 
     #[classmethod]
+    #[pyo3(signature = (df, sample_table_index=None))]
     pub fn from_polars(
         _cls: &Bound<'_, PyType>,
         df: PyDataFrame,
@@ -77,5 +78,9 @@ impl PyProject {
             },
             Err(err) => Err(PyRuntimeError::new_err(err.to_string())),
         }
+    }
+
+    fn __repr__(&self) -> String {
+        format!("{}", self.inner.samples)
     }
 }
