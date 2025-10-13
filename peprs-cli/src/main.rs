@@ -1,7 +1,7 @@
 mod cli;
 
 use clap::Parser;
-use peprs_core::{project::Project};
+use peprs_core::project::Project;
 
 use crate::cli::{Cli, Commands};
 

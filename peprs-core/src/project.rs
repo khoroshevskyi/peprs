@@ -228,12 +228,11 @@ impl Project {
                         .with_infer_schema_length(Some(10_000))
                         .finish()? // TODO: merge duplicate sample names
                         // coerce the sample table index into a string
-                        .with_column(col(sample_table_index).cast(DataType::String))
+                        .with_column(col(sample_table_index).cast(DataType::String)),
                 )
             }
             None => None,
         };
-        
 
         let subsamples = match &config.subsample_table {
             // TODO: implement subsample table logic
