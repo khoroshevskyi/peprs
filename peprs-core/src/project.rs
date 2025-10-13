@@ -55,6 +55,8 @@ impl Project {
         let samples = LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
             .with_has_header(true)
             .finish()?
+            // .group_by([col(DEFAULT_SAMPLE_TABLE_INDEX)])
+            // .agg([col("*")])
             .collect()?;
 
         Ok(Self {
@@ -290,6 +292,10 @@ impl Project {
         }
 
         // finally, collect the lazy frame
+        let _st_index = config
+            .sample_table_index
+            .clone()
+            .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX.to_string());
         let samples = match samples_lf {
             Some(lf) => Some(lf.collect()?),
             None => None,
@@ -386,7 +392,9 @@ mod tests {
     #[case("../example-peps/example_amendments1/project_config.yaml")]
     fn instantiate_pep(#[case] cfg_path: &'static str) {
         let proj = Project::from_config(cfg_path).build();
-        assert_eq!(proj.is_ok(), true);
+        let proj = proj.unwrap();
+        println!("{:?}", proj.samples);
+        // assert_eq!(proj.is_ok(), true);
     }
 
     #[rstest]
@@ -449,10 +457,16 @@ mod tests {
         assert_eq!(proj.is_ok(), true);
 
         let correct_vals = vec![
-            format!("{}/data/lab/project/pig_0h.fastq", std::env::var("HOME").unwrap()),
-            format!("{}/data/lab/project/pig_1h.fastq", std::env::var("HOME").unwrap()),
+            format!(
+                "{}/data/lab/project/pig_0h.fastq",
+                std::env::var("HOME").unwrap()
+            ),
+            format!(
+                "{}/data/lab/project/pig_1h.fastq",
+                std::env::var("HOME").unwrap()
+            ),
             "/path/from/collaborator/weirdNamingScheme_id_003.fastq".to_string(),
-            "/path/from/collaborator/weirdNamingScheme_id_004.fastq".to_string()
+            "/path/from/collaborator/weirdNamingScheme_id_004.fastq".to_string(),
         ];
         let proj = proj.unwrap();
         let protocol_values = proj
