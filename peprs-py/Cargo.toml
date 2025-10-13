@@ -11,3 +11,4 @@ crate-type = ["cdylib"]
 [dependencies]
 pyo3 = "0.25.0"
 peprs-core = { path = "../peprs-core", version = "0.1.0" }
+pyo3-polars = "0.24.0"

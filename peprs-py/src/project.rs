@@ -1,8 +1,11 @@
 use std::collections::HashMap;
 
+use peprs_core::consts::DEFAULT_SAMPLE_TABLE_INDEX;
 use peprs_core::project::Project;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::types::PyType;
+use pyo3_polars::PyDataFrame;
 
 use crate::error::PeprsCoreError;
 use crate::samples::PySamplesIter;
@@ -21,7 +24,7 @@ impl PyProject {
             let inner = Project::from_config(&path).build()?;
             Ok(PyProject { inner })
         } else if path.ends_with(".csv") {
-            let inner = Project::from_csv(&path)?;
+            let inner = Project::from_csv(&path)?.build()?;
             Ok(PyProject { inner })
         } else {
             Err(PeprsCoreError::from(
@@ -30,6 +33,21 @@ impl PyProject {
                 ),
             ))
         }
+    }
+
+    #[classmethod]
+    pub fn from_polars(
+        _cls: &Bound<'_, PyType>,
+        df: PyDataFrame,
+        sample_table_index: Option<String>,
+    ) -> Result<Self, PeprsCoreError> {
+        let sample_table_index =
+            sample_table_index.unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX.to_string());
+        let inner = Project::from_dataframe(df.into())
+            .with_sample_table_index(sample_table_index)
+            .build()?;
+
+        Ok(PyProject { inner })
     }
 
     #[getter]

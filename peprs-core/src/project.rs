@@ -11,9 +11,16 @@ use crate::error::Error;
 use crate::sample::{Sample, SamplesIter};
 use crate::utils::build_derive_template_expr;
 
+// Define the possible sources for a project
+enum ProjectSource {
+    Path(PathBuf),
+    DataFrame(DataFrame),
+}
+
 pub struct ProjectBuilder {
-    path: PathBuf,
+    source: ProjectSource,
     amendments: Option<Vec<String>>,
+    sample_table_index: Option<String>,
 }
 
 pub struct Project {
@@ -32,58 +39,89 @@ impl ProjectBuilder {
         self
     }
 
+    ///
+    /// Specify a custom sample table index column name.
+    ///
+    pub fn with_sample_table_index(mut self, index: String) -> Self {
+        self.sample_table_index = Some(index);
+        self
+    }
+
     /// Construct the `Project` using the specified configuration.
     ///
     /// This is the final step that will perform file I/O and parsing.
     pub fn build(self) -> Result<Project, Error> {
-        let config = Project::load_project_config(&self.path, self.amendments.as_deref())?;
-        let config_dir = self.path.parent().unwrap_or_else(|| Path::new("."));
-        Project::new_from_parsed_config(config, config_dir)
+        match self.source {
+            ProjectSource::Path(path) => {
+                let config = Project::load_project_config(&path, self.amendments.as_deref())?;
+                let config_dir = path.parent().unwrap_or_else(|| Path::new("."));
+
+                // honor the priority for sample_table_index:
+                // 1. Value from builder (highest)
+                // 2. Value from config file
+                // 3. Default
+                let final_index = self
+                    .sample_table_index
+                    .or(config.sample_table_index.clone())
+                    .unwrap_or_else(|| DEFAULT_SAMPLE_TABLE_INDEX.to_string());
+
+                let mut final_config = config;
+                final_config.sample_table_index = Some(final_index);
+
+                Project::new_from_parsed_config(final_config, config_dir)
+            }
+            ProjectSource::DataFrame(df) => {
+                let index = self
+                    .sample_table_index
+                    .unwrap_or_else(|| DEFAULT_SAMPLE_TABLE_INDEX.to_string());
+
+                Ok(Project {
+                    config: None,
+                    samples: df,
+                    subsamples: None,
+                    sample_table_index: index,
+                })
+            }
+        }
     }
 }
 
 impl Project {
-    ///
-    /// Create a new PEP project struct from a simple csv alone (no modifiers)
-    ///
-    pub fn from_csv<P>(path: P) -> Result<Self, Error>
-    where
-        P: AsRef<Path>,
-    {
-        let config = None;
-        let subsamples = None;
-        let samples = LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
+    /// Create a project from a CSV file.
+    /// This will load the CSV into a DataFrame and return a builder.
+    pub fn from_csv<P: AsRef<Path>>(path: P) -> Result<ProjectBuilder, Error> {
+        let df = LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
             .with_has_header(true)
             .with_infer_schema_length(Some(10_000))
             .finish()?
-            // .group_by([col(DEFAULT_SAMPLE_TABLE_INDEX)])
-            // .agg([col("*")])
-            // coerce the sample table index into a string
             .with_column(col(DEFAULT_SAMPLE_TABLE_INDEX).cast(DataType::String))
             .collect()?;
 
-        Ok(Self {
-            sample_table_index: DEFAULT_SAMPLE_TABLE_INDEX.to_string(),
-            config,
-            samples,
-            subsamples,
+        Ok(ProjectBuilder {
+            source: ProjectSource::DataFrame(df),
+            amendments: None,
+            sample_table_index: None,
         })
     }
 
     ///
-    /// Create a new PEP project struct from a project configuration file
-    /// that is a physical file on disk.
-    ///
-    pub fn from_config<P>(path: P) -> ProjectBuilder
-    where
-        P: AsRef<Path> + Clone,
-    {
-        // let config = Self::load_project_config(path.clone(), amendments)?;
-        // let config_dir = path.as_ref().parent().unwrap_or(Path::new("."));
-        // Project::new_from_parsed_config(config, config_dir)
+    /// Create a project from a YAML configuration file.
+    /// This returns a builder that will process the file upon `.build()`.
+    pub fn from_config<P: AsRef<Path>>(path: P) -> ProjectBuilder {
         ProjectBuilder {
-            path: path.as_ref().to_path_buf(),
+            source: ProjectSource::Path(path.as_ref().to_path_buf()),
             amendments: None,
+            sample_table_index: None,
+        }
+    }
+
+    ///
+    /// Create a project from an in-memory Polars DataFrame.
+    pub fn from_dataframe(df: DataFrame) -> ProjectBuilder {
+        ProjectBuilder {
+            source: ProjectSource::DataFrame(df),
+            amendments: None,
+            sample_table_index: None,
         }
     }
 
