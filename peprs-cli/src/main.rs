@@ -7,7 +7,7 @@ use crate::cli::{Cli, Commands};
 
 fn main() {
     let cli = Cli::parse();
-    
+
     match &cli.command {
         Commands::Inspect { path, name } => {
             let proj = Project::from_config(path).build();
@@ -24,9 +24,12 @@ fn main() {
                                 } else {
                                     eprintln!("Could not find sample with name '{}'", name);
                                 }
-                            },
+                            }
                             Err(error) => {
-                                eprintln!("There was an unexpected error retreiving the sample: {}", error);
+                                eprintln!(
+                                    "There was an unexpected error retreiving the sample: {}",
+                                    error
+                                );
                             }
                         }
                     } else {
@@ -38,13 +41,13 @@ fn main() {
                         println!("Number of attributes: {}", attributes);
                         println!("{}", proj.samples);
                     }
-                },
+                }
                 Err(err) => {
                     let msg = format!("Error parsing PEP: {}", err);
                     eprintln!("{}", msg);
                 }
             }
-        },
+        }
         Commands::Validate { path } => todo!(),
     }
 }
