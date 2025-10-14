@@ -361,6 +361,13 @@ impl Project {
     pub fn iter_samples(&'_ self) -> SamplesIter<'_> {
         SamplesIter::new(&self.samples)
     }
+
+    ///
+    /// Iterate over the raw, unprocessed samples in the project
+    ///
+    pub fn iter_samples_raw(&'_ self) -> SamplesIter<'_> {
+        SamplesIter::new(&self.samples_raw)
+    }
 }
 
 #[cfg(test)]
