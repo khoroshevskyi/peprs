@@ -1,0 +1,18 @@
+[package]
+name = "pephub-client"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dirs = "6"
+thiserror = "2.0.17"
+ureq = { version = "3.1.2", features = ["json"] }
+
+# our code
+peprs-core = { path = "../peprs-core" }
+serde_yaml = "0.9.34"
+serde = "1.0.228"
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"
+rstest = "0.26.1"

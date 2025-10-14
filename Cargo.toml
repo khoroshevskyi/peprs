@@ -4,5 +4,5 @@ edition = "2024"
 members = [
     "peprs-core",
     "peprs-py",
-    "peprs-cli",
+    "peprs-cli", "pephub-client",
 ]
