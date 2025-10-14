@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
-use serde::Deserialize;
 use peprs_core::config::ProjectConfig;
+use serde::Deserialize;
 use ureq::config::ConfigBuilder;
 use ureq::config::RedirectAuthHeaders;
 use ureq::tls::{TlsConfig, TlsProvider};
@@ -182,16 +182,17 @@ impl Api {
     pub fn get_config(&self, registry: &str) -> Result<ProjectConfig, ApiError> {
         let endpoint = &self.endpoint;
         let url = format!("{endpoint}/api/v1/projects/{registry}/config");
-        
+
         // First, deserialize the JSON response
-        let response: ConfigResponse = self.client
+        let response: ConfigResponse = self
+            .client
             .get(&url)
             .call()
             .map_err(Box::new)?
             .body_mut()
             .read_json()
             .map_err(Box::new)?;
-        
+
         // Then parse the YAML string into ProjectConfig
         let cfg: ProjectConfig = serde_yaml::from_str(&response.config)
             .map_err(|e| ApiError::YamlParseError(Box::new(e)))?;
@@ -199,6 +200,17 @@ impl Api {
         Ok(cfg)
     }
 
+    /// Get samples data from the specified pephub registry in CSV format
+    pub fn get_samples(&self, registry: &str) -> Result<Vec<u8>, ApiError> {
+        let endpoint = &self.endpoint;
+        let url = format!("{endpoint}/api/v1/projects/{registry}/samples?format=csv&raw=true");
+
+        let mut response = self.client.get(&url).call().map_err(Box::new)?;
+
+        let bytes = response.body_mut().read_to_vec().map_err(Box::new)?;
+
+        Ok(bytes)
+    }
 }
 
 #[derive(Debug, Error)]
@@ -236,11 +248,12 @@ pub enum ApiError {
     #[error("YAML parse error: {0}")]
     YamlParseError(#[from] Box<serde_yaml::Error>),
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rstest::*;
     use pretty_assertions::assert_eq;
+    use rstest::*;
 
     #[rstest]
     fn test_get_config_databio_example() {
@@ -248,7 +261,48 @@ mod tests {
         let result = api.get_config("databio/example");
         assert_eq!(result.is_ok(), true);
         assert_eq!(result.unwrap().pep_version, "2.1.0");
+    }
 
+    #[rstest]
+    fn test_get_samples_databio_example() {
+        let api = Api::new().expect("Failed to create API client");
+        let result = api.get_samples("databio/example");
+        assert_eq!(result.is_ok(), true);
+
+        let expected_csv = b"sample_name,sample_library_strategy,genome,time_point\n4-1_11102016,miRNA-Seq,hg38,morning\n3-1_11102016,miRNA-Seq,hg38,morning\n2-2_11102016,miRNA-Seq,hg38,afternoon\n2-1_11102016,miRNA-Seq,hg38,morning\n8-3_11152016,miRNA-Seq,hg38,evening\n8-1_11152016,miRNA-Seq,hg38,morning\n";
+        let actual_bytes = result.unwrap();
+        assert_eq!(actual_bytes, expected_csv);
+    }
+
+    #[rstest]
+    fn test_get_samples_invalid_registry() {
+        let api = Api::new().expect("Failed to create API client");
+        let result = api.get_samples("invalid/nonexistent");
+        assert_eq!(result.is_err(), true);
+    }
+
+    #[rstest]
+    fn test_api_builder_default() {
+        let builder = ApiBuilder::default();
+        assert_eq!(builder.endpoint, "https://pephub-api.databio.org");
+        assert_eq!(builder.token, None);
+    }
+
+    #[rstest]
+    fn test_api_builder_with_endpoint() {
+        let custom_endpoint = "https://custom-endpoint.com";
+        let api = ApiBuilder::new()
+            .with_endpoint(custom_endpoint.to_string())
+            .build()
+            .expect("Failed to build API");
+        assert_eq!(api.endpoint, custom_endpoint);
+    }
+
+    #[rstest]
+    fn test_api_builder_with_token() {
+        let token = "test-token-123";
+        let builder = ApiBuilder::new().with_token(Some(token.to_string()));
+        assert_eq!(builder.token, Some(token.to_string()));
     }
 
     #[rstest]

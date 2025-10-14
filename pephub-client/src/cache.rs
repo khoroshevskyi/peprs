@@ -61,10 +61,7 @@ impl Cache {
             Err(_) => None,
         }
     }
-
-    
 }
-
 
 impl Default for Cache {
     fn default() -> Self {
