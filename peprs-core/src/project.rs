@@ -26,7 +26,8 @@ pub struct ProjectBuilder {
 pub struct Project {
     pub config: Option<ProjectConfig>,
     pub samples: DataFrame,
-    pub subsamples: Option<Vec<DataFrame>>,
+    samples_raw: DataFrame,
+    subsamples: Option<Vec<DataFrame>>,
     pub sample_table_index: String,
 }
 
@@ -77,7 +78,8 @@ impl ProjectBuilder {
 
                 Ok(Project {
                     config: None,
-                    samples: df,
+                    samples: df.clone(),
+                    samples_raw: df,
                     subsamples: None,
                     sample_table_index: index,
                 })
@@ -272,6 +274,11 @@ impl Project {
             None => None,
         };
 
+        // we need to keep a "raw" representation
+        // of the sample table for internal use
+        // with our own infrastructure
+        let samples_df_raw = samples_lf.clone().unwrap_or_default().collect()?;
+
         let subsamples = match &config.subsample_table {
             // TODO: implement subsample table logic
             Some(_subsample_table) => None,
@@ -343,6 +350,7 @@ impl Project {
             sample_table_index: sample_table_index.to_owned(),
             config: Some(config),
             samples: samples.unwrap_or(DataFrame::empty()),
+            samples_raw: samples_df_raw,
             subsamples,
         })
     }
