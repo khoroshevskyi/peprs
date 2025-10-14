@@ -45,4 +45,13 @@ impl PySamplesIter {
         let project = self.project.borrow(py);
         project.inner.samples.height()
     }
+
+    fn __repr__(&self, py: Python) -> String {
+        let project = self.project.borrow(py);
+        format!(
+            "SamplesIter(samples={}, index={})",
+            project.inner.samples.height(),
+            self.index
+        )
+    }
 }

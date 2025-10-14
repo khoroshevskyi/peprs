@@ -1,5 +1,10 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use crate::consts::DEFAULT_PEP_VERSION;
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProjectConfig {
@@ -130,4 +135,23 @@ impl ProjectConfig {
 
         self
     }
+}
+
+impl Default for ProjectConfig {
+    fn default() -> Self {
+        Self {
+            pep_version: String::from(DEFAULT_PEP_VERSION),
+            sample_table: None,
+            subsample_table: None,
+            sample_table_index: None,
+            subsample_table_index: None,
+            sample_modifiers: None,
+            project_modifiers: None,
+        }
+    }
+}
+
+
+pub fn config_to_value(config: &ProjectConfig) -> Result<Value, serde_json::Error> {
+    serde_json::to_value(config)
 }

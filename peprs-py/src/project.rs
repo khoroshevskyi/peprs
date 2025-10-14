@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 
+use peprs_core::config::{config_to_value, ProjectConfig};
 use peprs_core::consts::DEFAULT_SAMPLE_TABLE_INDEX;
 use peprs_core::project::Project;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyType;
 use pyo3_polars::PyDataFrame;
+use pythonize::pythonize;
 
 use crate::error::PeprsCoreError;
 use crate::samples::PySamplesIter;
@@ -49,6 +51,57 @@ impl PyProject {
             .build()?;
 
         Ok(PyProject { inner })
+    }
+
+    #[pyo3(signature = (raw=false))]
+    pub fn to_dict(&self, raw: Option<bool>) -> PyResult<HashMap<String, PyObject>> {
+        let raw = raw.unwrap_or(false);
+
+        Python::with_gil(|py| {
+            let mut project_dict: HashMap<String, PyObject> = HashMap::new();
+            let cfg_object = pythonize(py, &self.inner.config.clone().unwrap_or_default())
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            project_dict.insert("project".to_string(), cfg_object.unbind());
+
+            match raw {
+                true => {
+                    let samples: Result<Vec<Bound<'_, PyAny>>, PyErr> = self
+                        .inner
+                        .iter_samples_raw()
+                        .map(|s| {
+                            pythonize(py, &s.into_map()).map_err(|e| {
+                                PyRuntimeError::new_err(format!(
+                                    "Failed to convert sample to Python object: {}",
+                                    e
+                                ))
+                            })
+                        })
+                        .collect();
+                    let samples = samples?;
+                    let samples_list = samples.into_pyobject(py)?;
+                    project_dict.insert("samples".to_string(), samples_list.unbind());
+                    Ok(project_dict)
+                }
+                false => {
+                    let samples: Result<Vec<Bound<'_, PyAny>>, PyErr> = self
+                        .inner
+                        .iter_samples()
+                        .map(|s| {
+                            pythonize(py, &s.into_map()).map_err(|e| {
+                                PyRuntimeError::new_err(format!(
+                                    "Failed to convert sample to Python object: {}",
+                                    e
+                                ))
+                            })
+                        })
+                        .collect();
+                    let samples = samples?;
+                    let samples_list = samples.into_pyobject(py)?;
+                    project_dict.insert("samples".to_string(), samples_list.unbind());
+                    Ok(project_dict)
+                }
+            }
+        })
     }
 
     #[getter]
