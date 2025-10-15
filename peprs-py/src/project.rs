@@ -3,11 +3,12 @@ use std::collections::HashMap;
 use peprs_core::consts::DEFAULT_SAMPLE_TABLE_INDEX;
 use peprs_core::project::Project;
 use pephub_client::api::Api;
+use polars::io::SerReader;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyType;
 use pyo3_polars::PyDataFrame;
-use polars::io::{CsvReader, SerReader};
+use polars::prelude::{CsvReader, LazyFrame};
 use std::io::Cursor;
 use pythonize::pythonize;
 
@@ -63,15 +64,15 @@ impl PyProject {
     ) -> Result<Self, PeprsCoreError> {
         let pephub = Api::new().unwrap();
         let cfg = pephub.get_config(&registry).unwrap();
-        let samples = pephub.get_samples(&registry).unwrap();
+        let samples_csv_bytes = pephub.get_samples(&registry).unwrap();
 
-        let cursor = Cursor::new(samples_csv);
+        let cursor = Cursor::new(samples_csv_bytes);
         let df = CsvReader::new(cursor)
-            .infer_schema(Some(100))
+            // .infer_schema(Some(100))
             .has_header(true)
             .finish()?;
 
-        let inner = Project::from_memory(config, df).build()?;
+        let inner = Project::from_memory(cfg, df).build()?;
 
         Ok(PyProject { inner })
     }

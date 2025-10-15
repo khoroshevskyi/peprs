@@ -12,6 +12,7 @@ use crate::sample::{Sample, SamplesIter};
 use crate::utils::build_derive_template_expr;
 
 // Define the possible sources for a project
+#[allow(clippy::large_enum_variant)]
 enum ProjectSource {
     Path(PathBuf),
     DataFrame(DataFrame),
@@ -92,11 +93,11 @@ impl ProjectBuilder {
                 mut config,
                 samples,
             } => {
-                // Honor the sample_table_index from the builder, if provided
+                // honor the sample_table_index from the builder, if provided
                 if let Some(idx) = self.sample_table_index {
                     config.sample_table_index = Some(idx);
                 }
-                // Call the shared logic
+                // call the shared logic
                 Project::finalize_project_creation(config, samples)
             }
         }
@@ -267,7 +268,31 @@ impl Project {
     }
 
     ///
-    /// Finally parse and create the project
+    /// Create new Project object after parsing the project config. This
+    /// is an internal function to enable moer abstact wrappers
+    ///
+    fn new_from_parsed_config<P>(config: ProjectConfig, config_dir: P) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+    {
+        let samples_df_raw = match &config.sample_table {
+            Some(sample_table) => {
+                let sample_table_path = config_dir.as_ref().join(sample_table);
+                LazyCsvReader::new(PlPath::new(sample_table_path.to_str().unwrap()))
+                    .with_has_header(true)
+                    .with_infer_schema_length(Some(10_000))
+                    .finish()?
+                    .collect()?
+            }
+            None => DataFrame::empty(),
+        };
+
+        Self::finalize_project_creation(config, samples_df_raw)
+    }
+
+    ///
+    /// Finally parse and create the project. This takes a parsed project configuration,
+    /// and a raw sample table (as a [`DataFrame`]) and then applies all sample modifiers
     fn finalize_project_creation(
         config: ProjectConfig,
         samples_df_raw: DataFrame,
@@ -351,30 +376,6 @@ impl Project {
             samples_raw: samples_df_raw,
             subsamples,
         })
-    }
-
-    ///
-    /// Create new Project object after parsing the project config. This
-    /// is an internal function to enable moer abstact wrappers
-    ///
-    fn new_from_parsed_config<P>(config: ProjectConfig, config_dir: P) -> Result<Self, Error>
-    where
-        P: AsRef<Path>,
-    {
-        let samples_df_raw = match &config.sample_table {
-            Some(sample_table) => {
-                let sample_table_path = config_dir.as_ref().join(sample_table);
-                LazyCsvReader::new(PlPath::new(sample_table_path.to_str().unwrap()))
-                    .with_has_header(true)
-                    .with_infer_schema_length(Some(10_000))
-                    .finish()?
-                    .collect()?
-            }
-            None => DataFrame::empty(),
-        };
-
-        // Call the shared logic
-        Self::finalize_project_creation(config, samples_df_raw)
     }
 
     ///
