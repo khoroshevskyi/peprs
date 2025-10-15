@@ -14,4 +14,4 @@ peprs-core = { path = "../peprs-core", version = "0.1.0" }
 pephub-client = { path = "../pephub-client", version = "0.1.0" }
 pyo3-polars = "0.24.0"
 pythonize = "0.25.0"
-polars = { version = "0.51.0", features=["io"] }
+polars = { version = "0.51.0" }

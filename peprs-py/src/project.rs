@@ -1,16 +1,17 @@
 use std::collections::HashMap;
 
+use pephub_client::api::Api;
 use peprs_core::consts::DEFAULT_SAMPLE_TABLE_INDEX;
 use peprs_core::project::Project;
-use pephub_client::api::Api;
 use polars::io::SerReader;
+use polars::prelude::*;
+use polars::prelude::{CsvReader, LazyFrame};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyType;
 use pyo3_polars::PyDataFrame;
-use polars::prelude::{CsvReader, LazyFrame};
-use std::io::Cursor;
 use pythonize::pythonize;
+use std::io::Cursor;
 
 use crate::error::PeprsCoreError;
 use crate::samples::PySamplesIter;
@@ -58,23 +59,29 @@ impl PyProject {
 
     #[classmethod]
     #[pyo3(signature = (registry))]
-    pub fn from_pephub(
-        _cls: &Bound<'_, PyType>,
-        registry: String,
-    ) -> Result<Self, PeprsCoreError> {
+    pub fn from_pephub(_cls: &Bound<'_, PyType>, registry: String) -> Result<Self, PeprsCoreError> {
         let pephub = Api::new().unwrap();
         let cfg = pephub.get_config(&registry).unwrap();
         let samples_csv_bytes = pephub.get_samples(&registry).unwrap();
 
+        let csv_reader_options = CsvReadOptions::default()
+            .with_has_header(true)
+            .with_infer_schema_length(Some(1000));
+
         let cursor = Cursor::new(samples_csv_bytes);
         let df = CsvReader::new(cursor)
-            // .infer_schema(Some(100))
-            .has_header(true)
-            .finish()?;
+            .with_options(csv_reader_options)
+            .finish();
 
-        let inner = Project::from_memory(cfg, df).build()?;
-
-        Ok(PyProject { inner })
+        match df {
+            Ok(df) => {
+                let inner = Project::from_memory(cfg, df).build()?;
+                Ok(PyProject { inner })
+            }
+            Err(err) => Err(PeprsCoreError::from(
+                peprs_core::error::Error::InvalidFormat(format!("Error reading CSV: {}", err)),
+            )),
+        }
     }
 
     #[pyo3(signature = (raw=false))]
