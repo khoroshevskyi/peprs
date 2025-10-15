@@ -4,7 +4,7 @@
 
 `peprs` - A spicy libary for managing biological sample metadata to enable reproducible and scalable bioinformatics
 
-## About
+## About this project
 `peprs` is a rust implementation of the [PEP specification](https://pep.databio.org/) and expanded ecosystem. In short, PEP is a framework for managing biological sample metadata. PEP is a **community driven** effort to create a **fast**, **reliable**, and **scalable** library for handling biological sample metadata.
 
 PEP and its ecosystem is developed and maintained by the [Databio](https://databio.org) team. As a challenge and learning experience, we have been rewriting the core components of the PEP ecosystem in Rust for performance and reliability. This library is still in early development.
