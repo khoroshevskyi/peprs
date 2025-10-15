@@ -15,6 +15,10 @@ use crate::utils::build_derive_template_expr;
 enum ProjectSource {
     Path(PathBuf),
     DataFrame(DataFrame),
+    InMemory {
+        config: ProjectConfig,
+        samples: DataFrame,
+    },
 }
 
 pub struct ProjectBuilder {
@@ -84,6 +88,17 @@ impl ProjectBuilder {
                     sample_table_index: index,
                 })
             }
+            ProjectSource::InMemory {
+                mut config,
+                samples,
+            } => {
+                // Honor the sample_table_index from the builder, if provided
+                if let Some(idx) = self.sample_table_index {
+                    config.sample_table_index = Some(idx);
+                }
+                // Call the shared logic
+                Project::finalize_project_creation(config, samples)
+            }
         }
     }
 }
@@ -122,6 +137,14 @@ impl Project {
     pub fn from_dataframe(df: DataFrame) -> ProjectBuilder {
         ProjectBuilder {
             source: ProjectSource::DataFrame(df),
+            amendments: None,
+            sample_table_index: None,
+        }
+    }
+
+    pub fn from_memory(config: ProjectConfig, samples: DataFrame) -> ProjectBuilder {
+        ProjectBuilder {
+            source: ProjectSource::InMemory { config, samples },
             amendments: None,
             sample_table_index: None,
         }
@@ -244,43 +267,18 @@ impl Project {
     }
 
     ///
-    /// Create new Project object after parsing the project config. This
-    /// is an internal function to enable moer abstact wrappers
-    ///
-    fn new_from_parsed_config<P>(config: ProjectConfig, config_dir: P) -> Result<Self, Error>
-    where
-        P: AsRef<Path>,
-    {
+    /// Finally parse and create the project
+    fn finalize_project_creation(
+        config: ProjectConfig,
+        samples_df_raw: DataFrame,
+    ) -> Result<Self, Error> {
         let sample_table_index = config
             .sample_table_index
             .as_deref()
             .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX);
 
-        // read in the sample table if it exists
-        // if the user has specified a sample table, read it in
-        // assuming its in the same directory as the project config file.
-        let mut samples_lf = match &config.sample_table {
-            Some(sample_table) => {
-                let sample_table_path = config_dir.as_ref().join(sample_table);
-                Some(
-                    LazyCsvReader::new(PlPath::new(sample_table_path.to_str().unwrap()))
-                        .with_has_header(true)
-                        .with_infer_schema_length(Some(10_000))
-                        .finish()? // TODO: merge duplicate sample names
-                        // coerce the sample table index into a string
-                        .with_column(col(sample_table_index).cast(DataType::String)),
-                )
-            }
-            None => None,
-        };
-
-        // we need to keep a "raw" representation
-        // of the sample table for internal use
-        // with our own infrastructure
-        let samples_df_raw = samples_lf.clone().unwrap_or_default().collect()?;
-
+        let mut samples_lf = Some(samples_df_raw.clone().lazy());
         let subsamples = match &config.subsample_table {
-            // TODO: implement subsample table logic
             Some(_subsample_table) => None,
             None => None,
         };
@@ -353,6 +351,30 @@ impl Project {
             samples_raw: samples_df_raw,
             subsamples,
         })
+    }
+
+    ///
+    /// Create new Project object after parsing the project config. This
+    /// is an internal function to enable moer abstact wrappers
+    ///
+    fn new_from_parsed_config<P>(config: ProjectConfig, config_dir: P) -> Result<Self, Error>
+    where
+        P: AsRef<Path>,
+    {
+        let samples_df_raw = match &config.sample_table {
+            Some(sample_table) => {
+                let sample_table_path = config_dir.as_ref().join(sample_table);
+                LazyCsvReader::new(PlPath::new(sample_table_path.to_str().unwrap()))
+                    .with_has_header(true)
+                    .with_infer_schema_length(Some(10_000))
+                    .finish()?
+                    .collect()?
+            }
+            None => DataFrame::empty(),
+        };
+
+        // Call the shared logic
+        Self::finalize_project_creation(config, samples_df_raw)
     }
 
     ///

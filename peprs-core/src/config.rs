@@ -5,7 +5,6 @@ use serde_json::Value;
 
 use crate::consts::DEFAULT_PEP_VERSION;
 
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProjectConfig {
     pub pep_version: String,
@@ -150,7 +149,6 @@ impl Default for ProjectConfig {
         }
     }
 }
-
 
 pub fn config_to_value(config: &ProjectConfig) -> Result<Value, serde_json::Error> {
     serde_json::to_value(config)

@@ -1,12 +1,14 @@
 use std::collections::HashMap;
 
-use peprs_core::config::{config_to_value, ProjectConfig};
 use peprs_core::consts::DEFAULT_SAMPLE_TABLE_INDEX;
 use peprs_core::project::Project;
+use pephub_client::api::Api;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyType;
 use pyo3_polars::PyDataFrame;
+use polars::io::{CsvReader, SerReader};
+use std::io::Cursor;
 use pythonize::pythonize;
 
 use crate::error::PeprsCoreError;
@@ -49,6 +51,27 @@ impl PyProject {
         let inner = Project::from_dataframe(df.into())
             .with_sample_table_index(sample_table_index)
             .build()?;
+
+        Ok(PyProject { inner })
+    }
+
+    #[classmethod]
+    #[pyo3(signature = (registry))]
+    pub fn from_pephub(
+        _cls: &Bound<'_, PyType>,
+        registry: String,
+    ) -> Result<Self, PeprsCoreError> {
+        let pephub = Api::new().unwrap();
+        let cfg = pephub.get_config(&registry).unwrap();
+        let samples = pephub.get_samples(&registry).unwrap();
+
+        let cursor = Cursor::new(samples_csv);
+        let df = CsvReader::new(cursor)
+            .infer_schema(Some(100))
+            .has_header(true)
+            .finish()?;
+
+        let inner = Project::from_memory(config, df).build()?;
 
         Ok(PyProject { inner })
     }
