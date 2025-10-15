@@ -31,7 +31,7 @@ pub struct ProjectBuilder {
 pub struct Project {
     pub config: Option<ProjectConfig>,
     pub samples: DataFrame,
-    samples_raw: DataFrame,
+    pub samples_raw: DataFrame,
     subsamples: Option<Vec<DataFrame>>,
     pub sample_table_index: String,
 }

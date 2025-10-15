@@ -135,6 +135,19 @@ impl PyProject {
         })
     }
 
+    #[pyo3(signature = (raw=false))]
+    pub fn to_polars(&self, raw: Option<bool>) -> PyResult<PyDataFrame> {
+        let raw = raw.unwrap_or(false);
+        match raw {
+            true => {
+                Ok(PyDataFrame(self.inner.samples_raw.clone()))
+            },
+            false => {
+                Ok(PyDataFrame(self.inner.samples.clone()))
+            }
+        }
+    }
+
     #[getter]
     pub fn get_pep_version(&self) -> PyResult<&str> {
         Ok(self.inner.get_pep_version())
