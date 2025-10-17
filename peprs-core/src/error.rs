@@ -30,6 +30,10 @@ pub enum Error {
     /// Not found amendment error
     #[error("Amendment '{0}' not found in config")]
     AmendmentNotFound(String),
+
+    /// Project missing required attribute/input error
+    #[error("Project missing required attribute: {0}")]
+    ProjectMissingAttribute(String),
 }
 
 /// Result type alias for convenience

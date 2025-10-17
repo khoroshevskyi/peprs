@@ -139,12 +139,8 @@ impl PyProject {
     pub fn to_polars(&self, raw: Option<bool>) -> PyResult<PyDataFrame> {
         let raw = raw.unwrap_or(false);
         match raw {
-            true => {
-                Ok(PyDataFrame(self.inner.samples_raw.clone()))
-            },
-            false => {
-                Ok(PyDataFrame(self.inner.samples.clone()))
-            }
+            true => Ok(PyDataFrame(self.inner.samples_raw.clone())),
+            false => Ok(PyDataFrame(self.inner.samples.clone())),
         }
     }
 

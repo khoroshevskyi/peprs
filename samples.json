@@ -1,0 +1,10 @@
+[
+  {
+    "say_hello.file": "data/frog1_data.txt",
+    "say_hello.protocol": "anySampleType"
+  },
+  {
+    "say_hello.file": "data/frog2_data.txt",
+    "say_hello.protocol": "anySampleType"
+  }
+]

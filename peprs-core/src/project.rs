@@ -10,6 +10,32 @@ use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX};
 use crate::error::Error;
 use crate::sample::{Sample, SamplesIter};
 use crate::utils::build_derive_template_expr;
+#[cfg(feature = "wdl")]
+use crate::wdl::WdlInputParsingOptions;
+#[cfg(feature = "wdl")]
+use crate::wdl::get_inputs_from_wdl;
+#[cfg(feature = "wdl")]
+use serde_json::Value;
+
+#[cfg(feature = "wdl")]
+fn any_value_to_json(any_value: AnyValue) -> Value {
+    match any_value {
+        AnyValue::Null => Value::Null,
+        AnyValue::Boolean(b) => Value::Bool(b),
+        AnyValue::String(s) => Value::String(s.to_string()),
+        AnyValue::Float32(f) => Value::from(f),
+        AnyValue::Float64(f) => Value::from(f),
+        AnyValue::Int8(i) => Value::from(i),
+        AnyValue::Int16(i) => Value::from(i),
+        AnyValue::Int32(i) => Value::from(i),
+        AnyValue::Int64(i) => Value::from(i),
+        AnyValue::UInt8(u) => Value::from(u),
+        AnyValue::UInt16(u) => Value::from(u),
+        AnyValue::UInt32(u) => Value::from(u),
+        AnyValue::UInt64(u) => Value::from(u),
+        av => Value::String(av.to_string()),
+    }
+}
 
 // Define the possible sources for a project
 #[allow(clippy::large_enum_variant)]
@@ -390,6 +416,63 @@ impl Project {
     ///
     pub fn iter_samples_raw(&'_ self) -> SamplesIter<'_> {
         SamplesIter::new(&self.samples_raw)
+    }
+
+    #[cfg(feature = "wdl")]
+    pub fn to_mapped_wdl_input(
+        &self,
+        options: WdlInputParsingOptions,
+    ) -> Result<String, Error> {
+        use serde_json::{Map, Value};
+
+        // Get the wdl file input schema -- this function is in a helper module
+        // and i basically ripped it out of the sprocket repository for now
+        // since it works so well
+        let input_schema = get_inputs_from_wdl(options)
+            .map_err(|e| Error::Processing(format!("WDL parsing error: {}", e)))?;
+
+        // Grab all the columns in our sample table
+        let pep_columns: std::collections::HashSet<&str> = self
+            .samples
+            .get_column_names()
+            .into_iter()
+            .map(|c| c.as_str())
+            .collect();
+
+        // Verify that the PEP has all the necessary attributes
+        for (key, value) in &input_schema {
+            // Assume key is "workflow_name.input_name", we just want "input_name"
+            let wdl_input_name = key.split('.').last().unwrap_or(key);
+
+            if let Some(s) = value.as_str() {
+                if s.contains("<REQUIRED>") && !pep_columns.contains(wdl_input_name) {
+                    return Err(Error::ProjectMissingAttribute(wdl_input_name.to_string()));
+                }
+            }
+        }
+
+        let mut populated_samples: Vec<Value> = Vec::with_capacity(self.len());
+
+        for sample in self.iter_samples() {
+            let mut sample_map = Map::new();
+            for (key, _) in &input_schema {
+                let wdl_input_name = key.split('.').last().unwrap_or(key);
+
+                // If the PEP has this column, get the value and add it to the JSON
+                if let Some(any_value) = sample.get(wdl_input_name) {
+                    let json_value = any_value_to_json(any_value.clone());
+                    sample_map.insert(wdl_input_name.to_string(), json_value);
+                }
+            }
+            populated_samples.push(Value::Object(sample_map));
+        }
+
+        // Return the populated samples as a JSON Value array
+        Ok(
+            serde_json::to_string_pretty(&Value::Array(populated_samples)).map_err(|e| {
+                crate::error::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
+            })?,
+        )
     }
 }
 
