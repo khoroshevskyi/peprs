@@ -3,7 +3,7 @@ version 1.0
 # Define a "struct" that represents the data for one sample.
 # This matches the structure of the objects inside the JSON array you're making!
 struct Sample {
-  File file
+  String file
   String protocol
 }
 
@@ -26,7 +26,7 @@ workflow say_hello {
 
 task greet {
   input {
-    File in_file
+    String in_file
     String in_protocol
   }
 
