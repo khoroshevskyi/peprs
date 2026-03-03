@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 
 use polars::prelude::*;
 use serde_yaml;
+use serde_yaml::Value as YValue;
+use serde_json;
 
 use crate::config::{ImplyCondition, ProjectConfig};
 use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX};
@@ -240,7 +242,12 @@ impl Project {
         let path = path.as_ref();
         let config_file = File::open(path)?;
         let reader = BufReader::new(config_file);
-        let config: ProjectConfig = serde_yaml::from_reader(reader)?;
+        let raw_config: YValue = serde_yaml::from_reader(reader)?;
+        let mut config: ProjectConfig = serde_yaml::from_value(raw_config.clone())?;
+        config.raw = match serde_json::to_value(raw_config){
+            Ok(raw) => Some(raw),
+            Err(_) => None,
+        };
 
         // start the recursive parsing process, passing the parent dir for path resolution
         let parent_dir = path.parent().unwrap_or_else(|| Path::new(""));

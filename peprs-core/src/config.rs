@@ -14,6 +14,7 @@ pub struct ProjectConfig {
     pub subsample_table_index: Option<SubsampleTableIndex>,
     pub sample_modifiers: Option<SampleModifiers>,
     pub project_modifiers: Option<ProjectModifiers>,
+    pub raw: Option<Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -146,10 +147,11 @@ impl Default for ProjectConfig {
             subsample_table_index: None,
             sample_modifiers: None,
             project_modifiers: None,
+            raw: None,
         }
     }
 }
 
 pub fn config_to_value(config: &ProjectConfig) -> Result<Value, serde_json::Error> {
-    serde_json::to_value(config)
+    serde_json::to_value(&config.raw)
 }

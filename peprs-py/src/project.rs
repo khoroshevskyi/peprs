@@ -12,6 +12,7 @@ use pyo3::types::PyType;
 use pyo3_polars::PyDataFrame;
 use pythonize::pythonize;
 use std::io::Cursor;
+use serde_json::Value;
 
 use crate::error::PeprsCoreError;
 use crate::samples::PySamplesIter;
@@ -90,9 +91,15 @@ impl PyProject {
 
         Python::with_gil(|py| {
             let mut project_dict: HashMap<String, PyObject> = HashMap::new();
-            let cfg_object = pythonize(py, &self.inner.config.clone().unwrap_or_default())
+
+            // Extract full yaml file, to have all information from config
+            let cfg_object: Option<Value> = match &self.inner.config {
+                Some(config) => config.raw.clone(),
+                None => None,
+            };
+            let cfg_py_object = pythonize(py, &cfg_object.unwrap_or_default())
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-            project_dict.insert("project".to_string(), cfg_object.unbind());
+            project_dict.insert("project".to_string(), cfg_py_object.unbind());
 
             match raw {
                 true => {
@@ -144,10 +151,35 @@ impl PyProject {
         }
     }
 
+    #[pyo3(signature = (raw=false))]
+    pub fn to_pandas(&self, py: Python<'_>, raw: Option<bool>) -> PyResult<Py<PyAny>> {
+        // to_pandas method doesn't exist in rust, we need first convert to Python polars object,
+        // and then using Python method convert it to Pandas
+        self.to_polars(raw)?
+          .into_pyobject(py)?
+          .call_method0("to_pandas")
+          .map(|b| b.unbind())
+        }
+
     #[getter]
     pub fn get_pep_version(&self) -> PyResult<&str> {
         Ok(self.inner.get_pep_version())
     }
+
+    #[getter]
+    pub fn get_config(&self) -> PyResult<Py<PyAny>> {
+        Python::with_gil(|py| {
+            match &self.inner.config {
+                Some(config) => {
+                    let value = config.raw.clone().unwrap_or_default();
+                    let obj = pythonize(py, &value)
+                        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+                    Ok(obj.into())
+                }
+                None => Ok(py.None()),
+            }
+        })
+}
 
     #[getter]
     fn samples(slf: Py<Self>, py: Python<'_>) -> PyResult<Py<PySamplesIter>> {

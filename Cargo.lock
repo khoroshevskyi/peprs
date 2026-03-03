@@ -2935,6 +2935,7 @@ dependencies = [
  "pyo3",
  "pyo3-polars",
  "pythonize",
+ "serde_json",
 ]
 
 [[package]]
