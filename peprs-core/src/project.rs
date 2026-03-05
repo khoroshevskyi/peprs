@@ -326,6 +326,7 @@ impl Project {
     ///
     /// Finally parse and create the project. This takes a parsed project configuration,
     /// and a raw sample table (as a [`DataFrame`]) and then applies all sample modifiers
+    /// TODO: add here subsamples handling
     fn finalize_project_creation(
         config: ProjectConfig,
         samples_df_raw: DataFrame,
@@ -369,7 +370,46 @@ impl Project {
                 }
 
                 // IMPLY
-                if let Some(imply_rules) = &modifiers.imply {}
+                if let Some(imply_rules) = &modifiers.imply {
+                    for rule in imply_rules {
+                        let schema = new_lf.collect_schema()?;
+
+                        let mut condition: Option<Expr> = None;
+                        for (attr_name, imply_condition) in &rule.if_condition {
+                            let attr_cond = match imply_condition {
+                                ImplyCondition::Single(val) => {
+                                    col(attr_name).eq(lit(val.clone()))
+                                }
+                                ImplyCondition::Multiple(vals) => vals.iter().fold(
+                                    lit(false),
+                                    |acc, v| acc.or(col(attr_name).eq(lit(v.clone()))),
+                                ),
+                            };
+                            condition = Some(match condition.take() {
+                                None => attr_cond,
+                                Some(existing) => existing.and(attr_cond),
+                            });
+                        }
+
+                        if let Some(cond_expr) = condition {
+                            for (attr_name, value) in &rule.then_action {
+                                // Preserve existing values for non-matching rows;
+                                // use null for columns that don't yet exist.
+                                let else_expr = if schema.contains(attr_name.as_str()) {
+                                    col(attr_name)
+                                } else {
+                                    lit(NULL)
+                                };
+                                new_lf = new_lf.with_column(
+                                    when(cond_expr.clone())
+                                        .then(lit(value.clone()))
+                                        .otherwise(else_expr)
+                                        .alias(attr_name),
+                                );
+                            }
+                        }
+                    }
+                }
 
                 // DERIVE
                 if let Some(derive_rule) = &modifiers.derive {
@@ -390,6 +430,11 @@ impl Project {
                         new_lf = new_lf.with_column(final_expr.alias(col_to_derive));
                     }
                 }
+
+                // TODO: collapse samples if duplicated samples
+                // In polars it seems impossible, and hard to achieve.
+                // Maybe we can do it using function .get_sample() ? so it will be done only this way
+
 
                 // after all potential modifications, re-assign
                 samples_lf = Some(new_lf)
