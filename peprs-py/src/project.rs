@@ -8,7 +8,7 @@ use polars::prelude::*;
 use polars::prelude::{CsvReader, LazyFrame};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyType;
+use pyo3::types::{PyDict, PyType};
 use pyo3_polars::PyDataFrame;
 use pythonize::pythonize;
 use serde_json::Value;
@@ -86,61 +86,61 @@ impl PyProject {
         }
     }
 
-    #[pyo3(signature = (raw=false))]
-    pub fn to_dict(&self, raw: Option<bool>) -> PyResult<HashMap<String, PyObject>> {
+    #[pyo3(signature = (raw=false, by_sample=true))]
+    pub fn to_dict(
+        &self,
+        py: Python<'_>,
+        raw: Option<bool>,
+        by_sample: Option<bool>,
+    ) -> PyResult<HashMap<String, PyObject>> {
         let raw = raw.unwrap_or(false);
+        let by_sample = by_sample.unwrap_or(true);
 
-        Python::with_gil(|py| {
-            let mut project_dict: HashMap<String, PyObject> = HashMap::new();
+        let mut project_dict: HashMap<String, PyObject> = HashMap::new();
 
-            // Extract full yaml file, to have all information from config
+        if raw == true {
+            // --- config ---
             let cfg_object: Option<Value> = match &self.inner.config {
                 Some(config) => config.raw.clone(),
                 None => None,
             };
             let cfg_py_object = pythonize(py, &cfg_object.unwrap_or_default())
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-            project_dict.insert("project".to_string(), cfg_py_object.unbind());
+            project_dict.insert("config".to_string(), cfg_py_object.unbind());
 
-            match raw {
-                true => {
-                    let samples: Result<Vec<Bound<'_, PyAny>>, PyErr> = self
-                        .inner
-                        .iter_samples_raw()
-                        .map(|s| {
-                            pythonize(py, &s.into_map()).map_err(|e| {
-                                PyRuntimeError::new_err(format!(
-                                    "Failed to convert sample to Python object: {}",
-                                    e
-                                ))
-                            })
-                        })
-                        .collect();
-                    let samples = samples?;
-                    let samples_list = samples.into_pyobject(py)?;
-                    project_dict.insert("samples".to_string(), samples_list.unbind());
-                    Ok(project_dict)
-                }
-                false => {
-                    let samples: Result<Vec<Bound<'_, PyAny>>, PyErr> = self
-                        .inner
-                        .iter_samples()
-                        .map(|s| {
-                            pythonize(py, &s.into_map()).map_err(|e| {
-                                PyRuntimeError::new_err(format!(
-                                    "Failed to convert sample to Python object: {}",
-                                    e
-                                ))
-                            })
-                        })
-                        .collect();
-                    let samples = samples?;
-                    let samples_list = samples.into_pyobject(py)?;
-                    project_dict.insert("samples".to_string(), samples_list.unbind());
-                    Ok(project_dict)
-                }
+            // --- samples (via Python polars .to_dict) ---
+            let py_df = PyDataFrame(self.inner.samples_raw.clone());
+            let py_df_bound = py_df.into_pyobject(py)?;
+            if by_sample == true {
+                let samples_dict = py_df_bound.call_method("to_dicts", (), None)?;
+                project_dict.insert("samples".to_string(), samples_dict.unbind());
+            } else {
+                let kwargs = PyDict::new(py);
+                kwargs.set_item("as_series", false)?;
+                let samples_dict = py_df_bound.call_method("to_dict", (), Some(&kwargs))?;
+                project_dict.insert("samples".to_string(), samples_dict.unbind());
             }
-        })
+
+            // TODO: add subsamples here.
+
+            Ok(project_dict)
+        } else {
+            // --- processed samples samples (via Python polars .to_dict) ---
+            let py_df = PyDataFrame(self.inner.samples.clone());
+            let py_df_bound = py_df.into_pyobject(py)?;
+
+            if by_sample == true {
+                let samples_dict = py_df_bound.call_method("to_dicts", (), None)?;
+                project_dict.insert("samples".to_string(), samples_dict.unbind());
+            } else {
+                let kwargs = PyDict::new(py);
+                kwargs.set_item("as_series", false)?;
+                let samples_dict = py_df_bound.call_method("to_dict", (), Some(&kwargs))?;
+                project_dict.insert("samples".to_string(), samples_dict.unbind());
+            }
+
+            Ok(project_dict)
+        }
     }
 
     #[pyo3(signature = (raw=false))]
