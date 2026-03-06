@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+
 use peprs_core::sample::Sample;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
 use crate::project::PyProject;
+use crate::utils::anyvalue_to_pyobject;
 
 #[pyclass(name = "SamplesIter")]
 pub struct PySamplesIter {
@@ -31,7 +34,10 @@ impl PySamplesIter {
 
         match sample_result {
             Ok(sample) => {
-                let map = sample.into_map();
+                let map: HashMap<String, PyObject> = sample
+                    .iter()
+                    .map(|(k, v)| (k.clone(), anyvalue_to_pyobject(py, v)))
+                    .collect();
                 match map.into_pyobject(py) {
                     Ok(py_dict) => Ok(Some(py_dict.unbind().into())),
                     Err(e) => Err(e),

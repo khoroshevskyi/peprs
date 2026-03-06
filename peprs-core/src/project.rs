@@ -3,9 +3,9 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 use polars::prelude::*;
+use serde_json;
 use serde_yaml;
 use serde_yaml::Value as YValue;
-use serde_json;
 
 use crate::config::{ImplyCondition, ProjectConfig};
 use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX};
@@ -222,13 +222,23 @@ impl Project {
             })?
             .equal(name)?;
 
-        // find the index of the first `true` value in our mask.
-        // we can iterate through the mask and find the position of the first `Some(true)`.
-        if let Some(row_index) = mask.iter().position(|val| val == Some(true)) {
-            Ok(Some(Sample::from_dataframe_row(&self.samples, row_index)?))
-        } else {
-            // if no `true` values were in the mask, the sample was not found.
-            Ok(None)
+        let idx: Vec<usize> = mask
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, v)| (v == Some(true)).then_some(i))
+            .collect();
+
+        match idx.len() {
+            0 => Ok(None), // No samples found
+            1 => Ok(Some(Sample::from_dataframe_row(
+                &self.samples,
+                idx.first().unwrap().clone(),
+            )?)),
+            _ => {
+                println!("More then one sample found. Returning first sample");
+                // Ok(Some(found_samples_count))
+                Ok(None)
+            }
         }
     }
 
@@ -244,7 +254,7 @@ impl Project {
         let reader = BufReader::new(config_file);
         let raw_config: YValue = serde_yaml::from_reader(reader)?;
         let mut config: ProjectConfig = serde_yaml::from_value(raw_config.clone())?;
-        config.raw = match serde_json::to_value(raw_config){
+        config.raw = match serde_json::to_value(raw_config) {
             Ok(raw) => Some(raw),
             Err(_) => None,
         };
@@ -377,13 +387,12 @@ impl Project {
                         let mut condition: Option<Expr> = None;
                         for (attr_name, imply_condition) in &rule.if_condition {
                             let attr_cond = match imply_condition {
-                                ImplyCondition::Single(val) => {
-                                    col(attr_name).eq(lit(val.clone()))
+                                ImplyCondition::Single(val) => col(attr_name).eq(lit(val.clone())),
+                                ImplyCondition::Multiple(vals) => {
+                                    vals.iter().fold(lit(false), |acc, v| {
+                                        acc.or(col(attr_name).eq(lit(v.clone())))
+                                    })
                                 }
-                                ImplyCondition::Multiple(vals) => vals.iter().fold(
-                                    lit(false),
-                                    |acc, v| acc.or(col(attr_name).eq(lit(v.clone()))),
-                                ),
                             };
                             condition = Some(match condition.take() {
                                 None => attr_cond,
@@ -435,7 +444,6 @@ impl Project {
                 // In polars it seems impossible, and hard to achieve.
                 // Maybe we can do it using function .get_sample() ? so it will be done only this way
 
-
                 // after all potential modifications, re-assign
                 samples_lf = Some(new_lf)
             }
@@ -471,10 +479,7 @@ impl Project {
     }
 
     #[cfg(feature = "wdl")]
-    pub fn to_mapped_wdl_input(
-        &self,
-        options: WdlInputParsingOptions,
-    ) -> Result<String, Error> {
+    pub fn to_mapped_wdl_input(&self, options: WdlInputParsingOptions) -> Result<String, Error> {
         use serde_json::{Map, Value};
 
         // Get the wdl file input schema -- this function is in a helper module

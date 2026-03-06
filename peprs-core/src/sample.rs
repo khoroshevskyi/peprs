@@ -3,6 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+use polars::prelude::AnyValue::Null;
 use polars::prelude::*;
 
 #[derive(Debug, Clone)]

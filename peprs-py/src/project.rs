@@ -11,11 +11,12 @@ use pyo3::prelude::*;
 use pyo3::types::PyType;
 use pyo3_polars::PyDataFrame;
 use pythonize::pythonize;
-use std::io::Cursor;
 use serde_json::Value;
+use std::io::Cursor;
 
 use crate::error::PeprsCoreError;
 use crate::samples::PySamplesIter;
+use crate::utils::anyvalue_to_pyobject;
 
 #[pyclass(name = "Project")]
 pub struct PyProject {
@@ -156,10 +157,10 @@ impl PyProject {
         // to_pandas method doesn't exist in rust, we need first convert to Python polars object,
         // and then using Python method convert it to Pandas
         self.to_polars(raw)?
-          .into_pyobject(py)?
-          .call_method0("to_pandas")
-          .map(|b| b.unbind())
-        }
+            .into_pyobject(py)?
+            .call_method0("to_pandas")
+            .map(|b| b.unbind())
+    }
 
     #[getter]
     pub fn get_pep_version(&self) -> PyResult<&str> {
@@ -168,18 +169,16 @@ impl PyProject {
 
     #[getter]
     pub fn get_config(&self) -> PyResult<Py<PyAny>> {
-        Python::with_gil(|py| {
-            match &self.inner.config {
-                Some(config) => {
-                    let value = config.raw.clone().unwrap_or_default();
-                    let obj = pythonize(py, &value)
-                        .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-                    Ok(obj.into())
-                }
-                None => Ok(py.None()),
+        Python::with_gil(|py| match &self.inner.config {
+            Some(config) => {
+                let value = config.raw.clone().unwrap_or_default();
+                let obj =
+                    pythonize(py, &value).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+                Ok(obj.into())
             }
+            None => Ok(py.None()),
         })
-}
+    }
 
     #[getter]
     fn samples(slf: Py<Self>, py: Python<'_>) -> PyResult<Py<PySamplesIter>> {
@@ -192,10 +191,16 @@ impl PyProject {
         )
     }
 
-    pub fn get_sample(&self, name: &str) -> PyResult<HashMap<String, String>> {
+    pub fn get_sample(&self, py: Python<'_>, name: &str) -> PyResult<HashMap<String, PyObject>> {
         match self.inner.get_sample(name) {
             Ok(sample) => match sample {
-                Some(s) => Ok(s.into_map()),
+                Some(s) => {
+                    let map = s
+                        .iter()
+                        .map(|(k, v)| (k.clone(), anyvalue_to_pyobject(py, v)))
+                        .collect();
+                    Ok(map)
+                }
                 None => Err(PyValueError::new_err(format!(
                     "Sample name: '{}' not found in sample table",
                     name
