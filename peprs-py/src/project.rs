@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use pephub_client::api::Api;
 use peprs_core::consts::DEFAULT_SAMPLE_TABLE_INDEX;
@@ -150,6 +151,42 @@ impl PyProject {
             true => Ok(PyDataFrame(self.inner.samples_raw.clone())),
             false => Ok(PyDataFrame(self.inner.samples.clone())),
         }
+    }
+
+    pub fn to_yaml(&mut self, path: PathBuf) -> PyResult<()> {
+        self.inner
+            .save_yaml(path)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    }
+
+    pub fn to_json(&mut self, path: PathBuf) -> PyResult<()> {
+        self.inner
+            .save_json(path)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    }
+
+    pub fn to_csv(&mut self, path: PathBuf) -> PyResult<()> {
+        self.inner
+            .save_csv(path)
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    }
+
+    pub fn print_yaml(&self) -> PyResult<()> {
+        self.inner
+            .print_yaml()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    }
+
+    pub fn print_json(&self) -> PyResult<()> {
+        self.inner
+            .print_json()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    }
+
+    pub fn print_csv(&self) -> PyResult<()> {
+        self.inner
+            .print_csv()
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
     #[pyo3(signature = (raw=false))]

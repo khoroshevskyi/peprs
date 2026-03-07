@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Write};
 use std::path::{Path, PathBuf};
 
 use polars::prelude::*;
@@ -263,6 +263,120 @@ impl Project {
         let parent_dir = path.parent().unwrap_or_else(|| Path::new(""));
 
         Self::parse_and_apply_project_modifiers(config, parent_dir, amendments)
+    }
+
+    pub fn save_json<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
+        let file = File::create(path.as_ref())?;
+
+        println!("Converting project to json file");
+        if self.samples.height() > 100000 {
+            println!(
+                "Project has more than 100K samples; conversion may take a while. Please be patient."
+            );
+        }
+
+        JsonWriter::new(file)
+            .with_json_format(JsonFormat::Json)
+            .finish(&mut self.samples)?;
+
+        println!(
+            "Processed project converted to json successfully and saved at {}",
+            path.as_ref().display()
+        );
+        Ok(())
+    }
+
+    pub fn save_yaml<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
+        println!("Converting project to yaml file");
+        if self.samples.height() > 100000 {
+            println!(
+                "Project has more than 100K samples; conversion may take a while. Please be patient."
+            );
+        }
+
+        let mut json_buf = Vec::new();
+        JsonWriter::new(&mut json_buf)
+            .with_json_format(JsonFormat::Json)
+            .finish(&mut self.samples)?;
+
+        let value: serde_json::Value = serde_json::from_slice(&json_buf)?;
+
+        let file = File::create(path.as_ref())?;
+        serde_yaml::to_writer(file, &value)?;
+
+        println!(
+            "Processed project converted to yaml successfully and saved at {}",
+            path.as_ref().display()
+        );
+        Ok(())
+    }
+
+    pub fn save_csv<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
+        let mut file = File::create(path.as_ref())?;
+
+        CsvWriter::new(&mut file)
+            .include_header(true)
+            .with_separator(b',')
+            .finish(&mut self.samples)?;
+
+        println!(
+            "Processed project successfully written to {:?}",
+            path.as_ref().display()
+        );
+        Ok(())
+    }
+
+    pub fn print_json(&self) -> Result<(), Error> {
+        if self.samples.height() > 1000 {
+            println!("Project has more than 1K samples; unable to print. Use `save_json` instead.");
+            return Ok(());
+        }
+
+        let mut json_buf = Vec::new();
+        let mut df = self.samples.clone();
+        JsonWriter::new(&mut json_buf)
+            .with_json_format(JsonFormat::Json)
+            .finish(&mut df)?;
+
+        let output = String::from_utf8_lossy(&json_buf);
+        println!("{}", output);
+        Ok(())
+    }
+
+    pub fn print_yaml(&self) -> Result<(), Error> {
+        if self.samples.height() > 1000 {
+            println!("Project has more than 1K samples; unable to print. Use `save_yaml` instead.");
+            return Ok(());
+        }
+
+        let mut json_buf = Vec::new();
+        let mut df = self.samples.clone();
+        JsonWriter::new(&mut json_buf)
+            .with_json_format(JsonFormat::Json)
+            .finish(&mut df)?;
+
+        let value: serde_json::Value = serde_json::from_slice(&json_buf)?;
+        let yaml_str = serde_yaml::to_string(&value)?;
+        println!("{}", yaml_str);
+        Ok(())
+    }
+
+    pub fn print_csv(&self) -> Result<(), Error> {
+        if self.samples.height() > 1000 {
+            println!("Project has more than 1K samples; unable to print. Use `save_csv` instead.");
+            return Ok(());
+        }
+
+        let mut csv_buf = Vec::new();
+        let mut df = self.samples.clone();
+        CsvWriter::new(&mut csv_buf)
+            .include_header(true)
+            .with_separator(b',')
+            .finish(&mut df)?;
+
+        let output = String::from_utf8_lossy(&csv_buf);
+        println!("{}", output);
+        Ok(())
     }
 
     ///
@@ -780,7 +894,7 @@ mod tests {
         let proj = Project::from_config(basic_pep).build();
         assert_eq!(proj.is_ok(), true);
 
-        let proj = proj.unwrap();
+        let mut proj = proj.unwrap();
         let samples = proj
             .iter_samples()
             .filter_map(|s| s.get("file").map(|av| av.str_value().to_string()))
@@ -788,5 +902,61 @@ mod tests {
 
         assert_eq!(samples.len(), 2);
         assert_eq!(samples, &["data/frog1_data.txt", "data/frog2_data.txt"]);
+
+        proj.save_json("/tmp/peprs_test_output.json").unwrap();
+    }
+
+    #[rstest]
+    fn test_save_json(basic_pep: &'static str) {
+        let mut proj = Project::from_config(basic_pep).build().unwrap();
+        let path = "/tmp/peprs_test_save.json";
+
+        proj.save_json(path).unwrap();
+
+        let content = std::fs::read_to_string(path).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+
+        let arr = parsed.as_array().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0]["sample_name"], "frog_1");
+        assert_eq!(arr[1]["sample_name"], "frog_2");
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[rstest]
+    fn test_save_yaml(basic_pep: &'static str) {
+        let mut proj = Project::from_config(basic_pep).build().unwrap();
+        let path = "/tmp/peprs_test_save.yaml";
+
+        proj.save_yaml(path).unwrap();
+
+        let content = std::fs::read_to_string(path).unwrap();
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
+
+        let arr = parsed.as_sequence().unwrap();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0]["sample_name"].as_str().unwrap(), "frog_1");
+        assert_eq!(arr[1]["sample_name"].as_str().unwrap(), "frog_2");
+
+        std::fs::remove_file(path).ok();
+    }
+
+    #[rstest]
+    fn test_save_csv(basic_pep: &'static str) {
+        let mut proj = Project::from_config(basic_pep).build().unwrap();
+        let path = "/tmp/peprs_test_save.csv";
+
+        proj.save_csv(path).unwrap();
+
+        let content = std::fs::read_to_string(path).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        // header + 2 data rows
+        assert_eq!(lines.len(), 3);
+        assert!(lines[0].contains("sample_name"));
+        assert!(lines[1].contains("frog_1"));
+        assert!(lines[2].contains("frog_2"));
+
+        std::fs::remove_file(path).ok();
     }
 }

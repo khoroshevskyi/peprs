@@ -18,6 +18,9 @@ impl std::convert::From<PeprsCoreError> for pyo3::PyErr {
             peprs_core::error::Error::ProjectMissingAttribute(error) => {
                 PyValueError::new_err(error)
             }
+            peprs_core::error::Error::Json(_) => {
+                PyValueError::new_err(format!("JSON error: {}", value.0))
+            }
         }
     }
 }

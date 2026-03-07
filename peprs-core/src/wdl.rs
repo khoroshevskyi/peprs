@@ -642,7 +642,6 @@ pub fn get_inputs_from_wdl(options: WdlInputParsingOptions) -> Result<Map<String
     Ok(inputs)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

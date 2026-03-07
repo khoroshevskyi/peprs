@@ -34,6 +34,10 @@ pub enum Error {
     /// Project missing required attribute/input error
     #[error("Project missing required attribute: {0}")]
     ProjectMissingAttribute(String),
+
+    /// JSON serialization/deserialization errors
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
 }
 
 /// Result type alias for convenience
