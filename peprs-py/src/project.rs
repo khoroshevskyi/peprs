@@ -153,21 +153,31 @@ impl PyProject {
         }
     }
 
-    pub fn to_yaml(&mut self, path: PathBuf) -> PyResult<()> {
+    #[pyo3(signature = (raw=false))]
+    pub fn to_pandas(&self, py: Python<'_>, raw: Option<bool>) -> PyResult<Py<PyAny>> {
+        // to_pandas method doesn't exist in rust, we need first convert to Python polars object,
+        // and then using Python method convert it to Pandas
+        self.to_polars(raw)?
+            .into_pyobject(py)?
+            .call_method0("to_pandas")
+            .map(|b| b.unbind())
+    }
+
+    pub fn write_yaml(&mut self, path: PathBuf) -> PyResult<()> {
         self.inner
-            .save_yaml(path)
+            .write_yaml(path)
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
-    pub fn to_json(&mut self, path: PathBuf) -> PyResult<()> {
+    pub fn write_json(&mut self, path: PathBuf) -> PyResult<()> {
         self.inner
-            .save_json(path)
+            .write_json(path)
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
-    pub fn to_csv(&mut self, path: PathBuf) -> PyResult<()> {
+    pub fn write_csv(&mut self, path: PathBuf) -> PyResult<()> {
         self.inner
-            .save_csv(path)
+            .write_csv(path)
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
@@ -189,15 +199,6 @@ impl PyProject {
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
-    #[pyo3(signature = (raw=false))]
-    pub fn to_pandas(&self, py: Python<'_>, raw: Option<bool>) -> PyResult<Py<PyAny>> {
-        // to_pandas method doesn't exist in rust, we need first convert to Python polars object,
-        // and then using Python method convert it to Pandas
-        self.to_polars(raw)?
-            .into_pyobject(py)?
-            .call_method0("to_pandas")
-            .map(|b| b.unbind())
-    }
 
     #[getter]
     pub fn get_pep_version(&self) -> PyResult<&str> {

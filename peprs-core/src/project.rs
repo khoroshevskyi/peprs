@@ -265,7 +265,7 @@ impl Project {
         Self::parse_and_apply_project_modifiers(config, parent_dir, amendments)
     }
 
-    pub fn save_json<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
+    pub fn write_json<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         let file = File::create(path.as_ref())?;
 
         println!("Converting project to json file");
@@ -286,7 +286,7 @@ impl Project {
         Ok(())
     }
 
-    pub fn save_yaml<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
+    pub fn write_yaml<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         println!("Converting project to yaml file");
         if self.samples.height() > 100000 {
             println!(
@@ -311,7 +311,7 @@ impl Project {
         Ok(())
     }
 
-    pub fn save_csv<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
+    pub fn write_csv<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         let mut file = File::create(path.as_ref())?;
 
         CsvWriter::new(&mut file)
