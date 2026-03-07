@@ -1,0 +1,19 @@
+description: Test schema for basic PEP
+properties:
+  samples:
+    type: array
+    items:
+      type: object
+      properties:
+        sample_name:
+          type: string
+        protocol:
+          type: string
+        file:
+          type: string
+      required:
+        - sample_name
+        - protocol
+        - file
+required:
+  - samples

@@ -1,6 +1,7 @@
 mod cli;
 
 use clap::Parser;
+use eido::{EidoSchema, validate_project};
 use peprs_core::project::Project;
 use peprs_core::wdl::WdlInputParsingOptions;
 
@@ -49,7 +50,39 @@ fn main() {
                 }
             }
         }
-        Commands::Validate { path } => todo!(),
+        Commands::Validate { path, schema } => {
+            let proj = Project::from_config(path).build();
+            match proj {
+                Ok(proj) => {
+                    let eido_schema = EidoSchema::from_file(schema);
+                    match eido_schema {
+                        Ok(eido_schema) => {
+                            let report = validate_project(&proj, &eido_schema);
+                            match report {
+                                Ok(report) => {
+                                    println!("{}", report);
+                                    if !report.is_valid() {
+                                        std::process::exit(1);
+                                    }
+                                }
+                                Err(err) => {
+                                    eprintln!("Validation error: {}", err);
+                                    std::process::exit(1);
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            eprintln!("Error loading schema: {}", err);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                Err(err) => {
+                    eprintln!("Error parsing PEP: {}", err);
+                    std::process::exit(1);
+                }
+            }
+        }
         Commands::Convert {
             path,
             schema,
