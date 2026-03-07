@@ -11,7 +11,7 @@ pub struct ProjectConfig {
     pub sample_table: Option<String>,
     pub subsample_table: Option<SubsampleTable>,
     pub sample_table_index: Option<String>,
-    pub subsample_table_index: Option<SubsampleTableIndex>,
+    pub subsample_table_index: Option<String>,
     pub sample_modifiers: Option<SampleModifiers>,
     pub project_modifiers: Option<ProjectModifiers>,
     pub raw: Option<Value>,
@@ -24,12 +24,13 @@ pub enum SubsampleTable {
     Multiple(Vec<String>),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(untagged)]
-pub enum SubsampleTableIndex {
-    Single(String),
-    Multiple(Vec<String>),
-}
+// We don't need it for now
+// #[derive(Debug, Serialize, Deserialize, Clone)]
+// #[serde(untagged)]
+// pub enum SubsampleTableIndex {
+//     Single(String),
+//     Multiple(Vec<String>),
+// }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SampleModifiers {

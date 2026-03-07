@@ -7,7 +7,7 @@ use serde_json;
 use serde_yaml;
 use serde_yaml::Value as YValue;
 
-use crate::config::{ImplyCondition, ProjectConfig};
+use crate::config::{ImplyCondition, ProjectConfig, SubsampleTable};
 use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX};
 use crate::error::Error;
 use crate::sample::{Sample, SamplesIter};
@@ -126,7 +126,7 @@ impl ProjectBuilder {
                     config.sample_table_index = Some(idx);
                 }
                 // call the shared logic
-                Project::finalize_project_creation(config, samples)
+                Project::finalize_project_creation(config, samples, None)
             }
         }
     }
@@ -471,7 +471,31 @@ impl Project {
             None => DataFrame::empty(),
         };
 
-        Self::finalize_project_creation(config, samples_df_raw)
+        let subsamples_df: Option<Vec<DataFrame>> = match &config.subsample_table {
+            Some(subsample_table) => {
+                let paths = match subsample_table {
+                    SubsampleTable::Single(sub) => vec![sub.as_str()],
+                    SubsampleTable::Multiple(sub_vector) => {
+                        sub_vector.iter().map(|s| s.as_str()).collect()
+                    }
+                };
+                let dfs = paths
+                    .into_iter()
+                    .map(|sub| {
+                        let sub_path = config_dir.as_ref().join(sub);
+                        LazyCsvReader::new(PlPath::new(sub_path.to_str().unwrap()))
+                            .with_has_header(true)
+                            .with_infer_schema_length(Some(10_000))
+                            .finish()
+                            .and_then(|lf| lf.collect())
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Some(dfs)
+            }
+            None => None,
+        };
+
+        Self::finalize_project_creation(config, samples_df_raw, subsamples_df)
     }
 
     ///
@@ -481,17 +505,20 @@ impl Project {
     fn finalize_project_creation(
         config: ProjectConfig,
         samples_df_raw: DataFrame,
+        subsamples: Option<Vec<DataFrame>>,
     ) -> Result<Self, Error> {
         let sample_table_index = config
             .sample_table_index
             .as_deref()
             .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX);
 
+        let subsample_table_index = config.subsample_table_index
+            .as_deref()
+            .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX);
+
         let mut samples_lf = Some(samples_df_raw.clone().lazy());
-        let subsamples = match &config.subsample_table {
-            Some(_subsample_table) => None,
-            None => None,
-        };
+
+        // TODO: add here merging subsamples into samples_if dataframe
 
         // apply modifiers if they exist and if there is a sample table
         #[allow(clippy::collapsible_if)]
