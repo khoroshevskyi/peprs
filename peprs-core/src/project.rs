@@ -326,6 +326,33 @@ impl Project {
         Ok(())
     }
 
+    pub fn write_raw<P: AsRef<Path>>(&mut self, path: P, zip: Option<bool>) -> Result<(), Error> {
+        let zip = zip.unwrap_or(false);
+        // If not zipped:
+        // 1. create a folder
+        // 2. save csv
+        // 3. save subsamples
+        // 3. save config pointing to csv
+
+        // If not zipped:
+        // 1. create a folder
+        // 2. save csv
+        // 3. save subsamples
+        // 3. save config pointing to csv
+        panic!("This function is not implemented yet");
+        Ok(())
+    }
+
+    pub fn write_config_json<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
+        panic!("This function is not implemented yet");
+        Ok(())
+    }
+
+    pub fn write_config_yaml<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
+        panic!("This function is not implemented yet");
+        Ok(())
+    }
+
     pub fn print_json(&self) -> Result<(), Error> {
         if self.samples.height() > 1000 {
             println!("Project has more than 1K samples; unable to print. Use `save_json` instead.");
