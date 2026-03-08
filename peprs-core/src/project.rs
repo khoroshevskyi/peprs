@@ -8,7 +8,7 @@ use serde_yaml;
 use serde_yaml::Value as YValue;
 
 use crate::config::{ImplyCondition, ProjectConfig, SubsampleTable};
-use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX};
+use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX, DEFAULT_SUBSAMPLE_TABLE_INDEX};
 use crate::error::Error;
 use crate::sample::{Sample, SamplesIter};
 use crate::utils::build_derive_template_expr;
@@ -501,7 +501,7 @@ impl Project {
     ///
     /// Finally parse and create the project. This takes a parsed project configuration,
     /// and a raw sample table (as a [`DataFrame`]) and then applies all sample modifiers
-    /// TODO: add here subsamples handling
+    /// and merges subsamples.
     fn finalize_project_creation(
         config: ProjectConfig,
         samples_df_raw: DataFrame,
@@ -512,13 +512,12 @@ impl Project {
             .as_deref()
             .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX);
 
-        let subsample_table_index = config.subsample_table_index
+        let subsample_table_index = config
+            .subsample_table_index
             .as_deref()
-            .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX);
+            .unwrap_or(DEFAULT_SUBSAMPLE_TABLE_INDEX);
 
         let mut samples_lf = Some(samples_df_raw.clone().lazy());
-
-        // TODO: add here merging subsamples into samples_if dataframe
 
         // apply modifiers if they exist and if there is a sample table
         #[allow(clippy::collapsible_if)]
@@ -617,6 +616,14 @@ impl Project {
             }
         }
 
+        // merge subsamples after modifiers: aggregate each subsample table by index,
+        // then left-join onto samples. Subsample columns become list-typed.
+        if let Some(ref sub_dfs) = subsamples {
+            if let Some(lf) = samples_lf.take() {
+                samples_lf = Some(Self::merge_subsamples(lf, sub_dfs, sample_table_index)?);
+            }
+        }
+
         // finally, collect the lazy frame
         let samples = match samples_lf {
             Some(lf) => Some(lf.collect()?),
@@ -630,6 +637,75 @@ impl Project {
             samples_raw: samples_df_raw,
             subsamples,
         })
+    }
+
+    /// Merge subsample DataFrames into the samples LazyFrame.
+    ///
+    /// For each subsample table:
+    /// 1. Group by `sample_table_index`, aggregating all value columns into lists
+    /// 2. Left-join onto samples
+    /// 3. For overlapping columns, subsample list replaces the sample value;
+    ///    samples without subsamples get their original value wrapped in a single-element list
+    fn merge_subsamples(
+        samples_lf: LazyFrame,
+        subsamples: &[DataFrame],
+        sample_table_index: &str,
+    ) -> Result<LazyFrame, Error> {
+        let mut result_lf = samples_lf;
+        let idx = PlSmallStr::from_str(sample_table_index);
+
+        for subsample_df in subsamples {
+            if subsample_df.height() == 0 {
+                continue;
+            }
+
+            let value_cols: Vec<PlSmallStr> = subsample_df
+                .get_column_names()
+                .into_iter()
+                .filter(|c| c.as_str() != sample_table_index)
+                .cloned()
+                .collect();
+
+            if value_cols.is_empty() {
+                continue;
+            }
+
+            // group by index → value columns become lists
+            let agg_exprs: Vec<Expr> = value_cols.iter().map(|c| col(c.clone())).collect();
+            let grouped_lf = subsample_df
+                .clone()
+                .lazy()
+                .group_by([col(idx.clone())])
+                .agg(agg_exprs);
+
+            let sample_schema = result_lf.collect_schema()?;
+
+            let suffix = "_subsample";
+            result_lf = result_lf.join(
+                grouped_lf,
+                [col(idx.clone())],
+                [col(idx.clone())],
+                JoinArgs::new(JoinType::Left).with_suffix(Some(PlSmallStr::from_str(suffix))),
+            );
+
+            // coalesce overlapping columns: subsample list has priority
+            for col_name in &value_cols {
+                let suffixed = format!("{}{}", col_name, suffix);
+                if sample_schema.contains(col_name.as_str()) {
+                    result_lf = result_lf
+                        .with_column(
+                            when(col(PlSmallStr::from_str(&suffixed)).is_not_null())
+                                .then(col(PlSmallStr::from_str(&suffixed)))
+                                .otherwise(concat_list([col(col_name.clone())]).unwrap())
+                                .alias(col_name.clone()),
+                        )
+                        .drop(cols([suffixed.as_str()]));
+                }
+                // new columns from subsamples are already added by the join
+            }
+        }
+
+        Ok(result_lf)
     }
 
     ///
@@ -957,7 +1033,7 @@ mod tests {
         assert_eq!(samples.len(), 2);
         assert_eq!(samples, &["data/frog1_data.txt", "data/frog2_data.txt"]);
 
-        proj.save_json("/tmp/peprs_test_output.json").unwrap();
+        proj.write_json("/tmp/peprs_test_output.json").unwrap();
     }
 
     #[rstest]
@@ -965,7 +1041,7 @@ mod tests {
         let mut proj = Project::from_config(basic_pep).build().unwrap();
         let path = "/tmp/peprs_test_save.json";
 
-        proj.save_json(path).unwrap();
+        proj.write_json(path).unwrap();
 
         let content = std::fs::read_to_string(path).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
@@ -983,7 +1059,7 @@ mod tests {
         let mut proj = Project::from_config(basic_pep).build().unwrap();
         let path = "/tmp/peprs_test_save.yaml";
 
-        proj.save_yaml(path).unwrap();
+        proj.write_yaml(path).unwrap();
 
         let content = std::fs::read_to_string(path).unwrap();
         let parsed: serde_yaml::Value = serde_yaml::from_str(&content).unwrap();
@@ -1001,7 +1077,7 @@ mod tests {
         let mut proj = Project::from_config(basic_pep).build().unwrap();
         let path = "/tmp/peprs_test_save.csv";
 
-        proj.save_csv(path).unwrap();
+        proj.write_csv(path).unwrap();
 
         let content = std::fs::read_to_string(path).unwrap();
         let lines: Vec<&str> = content.lines().collect();
@@ -1012,5 +1088,70 @@ mod tests {
         assert!(lines[2].contains("frog_2"));
 
         std::fs::remove_file(path).ok();
+    }
+
+    // --- Subsample tests ---
+
+    #[rstest]
+    #[case("../example-peps/example_subtable1/project_config.yaml")]
+    // case subtable2 skipped: derive references column only in subsample table (needs subsample-aware derive)
+    #[case("../example-peps/example_subtable3/project_config.yaml")]
+    #[case("../example-peps/example_subtable4/project_config.yaml")]
+    #[case("../example-peps/example_subtable5/project_config.yaml")]
+    fn instantiate_subtable_pep(#[case] cfg_path: &str) {
+        let proj = Project::from_config(cfg_path).build();
+        assert!(proj.is_ok(), "Failed to build: {:?}", proj.err());
+    }
+
+    #[rstest]
+    fn subtable1_basic_merge() {
+        let proj = Project::from_config("../example-peps/example_subtable1/project_config.yaml")
+            .build()
+            .unwrap();
+
+        // after re-aggregation, should have 3 samples (sorted by sample_name)
+        assert_eq!(proj.samples.height(), 3);
+
+        let file_col = proj.samples.column("file").unwrap();
+        // file column should be list type (subsamples were merged)
+        assert!(
+            matches!(file_col.dtype(), DataType::List(_)),
+            "Expected List type for 'file', got {:?}",
+            file_col.dtype()
+        );
+
+        // sorted order: frog_1 (idx 0), frog_2 (idx 1), frog_3 (idx 2)
+        // frog_1 should have 3 file values
+        let frog1_files = file_col.list().unwrap().get_as_series(0).unwrap();
+        assert_eq!(frog1_files.len(), 3);
+
+        // frog_2 should have 2 file values
+        let frog2_files = file_col.list().unwrap().get_as_series(1).unwrap();
+        assert_eq!(frog2_files.len(), 2);
+
+        // frog_3 has no subsamples — its original value should be wrapped in a single-element list
+        let frog3_files = file_col.list().unwrap().get_as_series(2).unwrap();
+        assert_eq!(frog3_files.len(), 1);
+
+        // subsample_name column should have been added
+        assert!(proj.samples.column("subsample_name").is_ok());
+    }
+
+    #[rstest]
+    fn subtable4_multiple_value_columns() {
+        let proj = Project::from_config("../example-peps/example_subtable4/project_config.yaml")
+            .build()
+            .unwrap();
+
+        // read1 and read2 should both be list columns
+        let read1_col = proj.samples.column("read1").unwrap();
+        let read2_col = proj.samples.column("read2").unwrap();
+        assert!(matches!(read1_col.dtype(), DataType::List(_)));
+        assert!(matches!(read2_col.dtype(), DataType::List(_)));
+
+        // sorted order: frog_1 is idx 0
+        // frog_1 has 3 subsamples for read1/read2
+        let frog1_read1 = read1_col.list().unwrap().get_as_series(0).unwrap();
+        assert_eq!(frog1_read1.len(), 3);
     }
 }

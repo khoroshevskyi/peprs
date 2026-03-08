@@ -24,13 +24,12 @@ pub enum SubsampleTable {
     Multiple(Vec<String>),
 }
 
-// We don't need it for now
-// #[derive(Debug, Serialize, Deserialize, Clone)]
-// #[serde(untagged)]
-// pub enum SubsampleTableIndex {
-//     Single(String),
-//     Multiple(Vec<String>),
-// }
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum SubsampleTableIndex {
+    Single(String),
+    Multiple(Vec<String>),
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SampleModifiers {
@@ -94,7 +93,10 @@ impl ProjectConfig {
             self.sample_table_index = Some(val);
         }
         if let Some(val) = amendment.subsample_table_index {
-            self.subsample_table_index = Some(val);
+            self.subsample_table_index = Some(match val {
+                SubsampleTableIndex::Single(s) => s,
+                SubsampleTableIndex::Multiple(v) => v.into_iter().next().unwrap_or_default(),
+            });
         }
         if let Some(val) = amendment.sample_modifiers {
             self.sample_modifiers = Some(val);

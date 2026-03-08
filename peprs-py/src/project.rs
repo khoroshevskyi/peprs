@@ -199,7 +199,6 @@ impl PyProject {
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
-
     #[getter]
     pub fn get_pep_version(&self) -> PyResult<&str> {
         Ok(self.inner.get_pep_version())
