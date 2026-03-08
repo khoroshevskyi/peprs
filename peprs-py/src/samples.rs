@@ -47,6 +47,22 @@ impl PySamplesIter {
         }
     }
 
+    fn __getitem__(&self, py: Python, index: isize) -> PyResult<PyObject> {
+        let project = self.project.borrow(py);
+        let len = project.inner.samples.height() as isize;
+        let idx = if index < 0 { index + len } else { index };
+        if idx < 0 || idx >= len {
+            return Err(pyo3::exceptions::PyIndexError::new_err("sample index out of range"));
+        }
+        let sample = Sample::from_dataframe_row(&project.inner.samples, idx as usize)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let map: HashMap<String, PyObject> = sample
+            .iter()
+            .map(|(k, v)| (k.clone(), anyvalue_to_pyobject(py, v)))
+            .collect();
+        Ok(map.into_pyobject(py)?.unbind().into())
+    }
+
     fn __len__(&self, py: Python) -> usize {
         let project = self.project.borrow(py);
         project.inner.samples.height()
