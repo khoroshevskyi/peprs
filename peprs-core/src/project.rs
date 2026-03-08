@@ -328,28 +328,56 @@ impl Project {
 
     pub fn write_raw<P: AsRef<Path>>(&mut self, path: P, zip: Option<bool>) -> Result<(), Error> {
         let zip = zip.unwrap_or(false);
-        // If not zipped:
-        // 1. create a folder
-        // 2. save csv
-        // 3. save subsamples
-        // 3. save config pointing to csv
 
+        match zip {
+            true => {
+                self.write_raw_zip(path)
+            },
+            false => {
+                self.write_raw_folder(path)
+            }
+        }
+    }
+
+    pub fn write_raw_folder<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
+        // If not zipped:
+        // 1. create a folder (project_name from config)
+        // 2. save csv (raw samples)
+        // 3. save subsamples (each subsample table)
+        // 3. save config pointing to csv
+        Err(Error::processing("write_raw_folder is not yet implemented"))
+    }
+
+    pub fn write_raw_zip<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         // If not zipped:
         // 1. create a folder
         // 2. save csv
         // 3. save subsamples
         // 3. save config pointing to csv
-        panic!("This function is not implemented yet");
-        Ok(())
+        Err(Error::processing("write_raw_zip is not yet implemented"))
     }
 
     pub fn write_config_json<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
-        panic!("This function is not implemented yet");
+        if let Some(ref config) = self.config {
+            if let Some(ref raw) = config.raw {
+                let file_path = path.as_ref().join("project_config.json");
+                let json = serde_json::to_string_pretty(raw)?;
+                let mut file = File::create(file_path)?;
+                file.write_all(json.as_bytes())?;
+            }
+        }
         Ok(())
     }
 
     pub fn write_config_yaml<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
-        panic!("This function is not implemented yet");
+        if let Some(ref config) = self.config {
+            if let Some(ref raw) = config.raw {
+                let file_path = path.as_ref().join("project_config.yaml");
+                let yaml = serde_yaml::to_string(raw)?;
+                let mut file = File::create(file_path)?;
+                file.write_all(yaml.as_bytes())?;
+            }
+        }
         Ok(())
     }
 
