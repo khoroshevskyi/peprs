@@ -122,7 +122,24 @@ impl PyProject {
                 project_dict.insert("samples".to_string(), samples_dict.unbind());
             }
 
-            // TODO: add subsamples here.
+            // --- subsamples ---
+            if let Some(ref sub_dfs) = self.inner.subsamples {
+                let py_list = pyo3::types::PyList::empty(py);
+                for sub_df in sub_dfs {
+                    let py_sub_df = PyDataFrame(sub_df.clone());
+                    let py_sub_df_bound = py_sub_df.into_pyobject(py)?;
+                    if by_sample == true {
+                        let sub_dict = py_sub_df_bound.call_method("to_dicts", (), None)?;
+                        py_list.append(sub_dict)?;
+                    } else {
+                        let kwargs = PyDict::new(py);
+                        kwargs.set_item("as_series", false)?;
+                        let sub_dict = py_sub_df_bound.call_method("to_dict", (), Some(&kwargs))?;
+                        py_list.append(sub_dict)?;
+                    }
+                }
+                project_dict.insert("subsamples".to_string(), py_list.into_any().unbind());
+            }
 
             Ok(project_dict)
         } else {

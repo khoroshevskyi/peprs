@@ -60,7 +60,7 @@ pub struct Project {
     pub config: Option<ProjectConfig>,
     pub samples: DataFrame,
     pub samples_raw: DataFrame,
-    subsamples: Option<Vec<DataFrame>>,
+    pub subsamples: Option<Vec<DataFrame>>,
     pub sample_table_index: String,
 }
 
