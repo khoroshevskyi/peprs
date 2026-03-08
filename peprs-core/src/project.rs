@@ -530,7 +530,7 @@ impl Project {
     /// Finally parse and create the project. This takes a parsed project configuration,
     /// and a raw sample table (as a [`DataFrame`]) and then applies all sample modifiers
     /// and merges subsamples.
-    fn finalize_project_creation(
+    pub fn finalize_project_creation(
         config: ProjectConfig,
         samples_df_raw: DataFrame,
         subsamples: Option<Vec<DataFrame>>,

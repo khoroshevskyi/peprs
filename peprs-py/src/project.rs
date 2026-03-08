@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use pephub_client::api::Api;
 use peprs_core::consts::DEFAULT_SAMPLE_TABLE_INDEX;
+use peprs_core::config::ProjectConfig;
 use peprs_core::project::Project;
 use polars::io::SerReader;
 use polars::prelude::*;
@@ -11,7 +12,7 @@ use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyType};
 use pyo3_polars::PyDataFrame;
-use pythonize::pythonize;
+use pythonize::{depythonize, pythonize};
 use serde_json::Value;
 use std::io::Cursor;
 
@@ -57,6 +58,50 @@ impl PyProject {
             .with_sample_table_index(sample_table_index)
             .build()?;
 
+        Ok(PyProject { inner })
+    }
+
+    #[classmethod]
+    pub fn from_dict(
+        _cls: &Bound<'_, PyType>,
+        pep_dictionary: &Bound<'_, PyDict>,
+        py: Python<'_>,
+    ) -> PyResult<Self> {
+        // 1. Config
+        let config_obj = pep_dictionary
+            .get_item("config")?
+            .ok_or_else(|| PyValueError::new_err("Missing 'config' key"))?;
+        let config_value: Value = depythonize(&config_obj)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let mut config: ProjectConfig = serde_json::from_value(config_value.clone())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        config.raw = Some(config_value);
+
+        // 2. Samples
+        let samples_obj = pep_dictionary
+            .get_item("samples")?
+            .ok_or_else(|| PyValueError::new_err("Missing 'samples' key"))?;
+        let pl = py.import("polars")?;
+        let py_df = pl.call_method1("DataFrame", (samples_obj,))?;
+        let samples_df: DataFrame = py_df.extract::<PyDataFrame>()?.0;
+
+        // 3. Subsamples
+        let subsamples = match pep_dictionary.get_item("subsamples")? {
+            Some(subs_list) => {
+                let mut dfs = Vec::new();
+                for sub_item in subs_list.try_iter()? {
+                    let sub_item = sub_item?;
+                    let py_sub_df = pl.call_method1("DataFrame", (&sub_item,))?;
+                    dfs.push(py_sub_df.extract::<PyDataFrame>()?.0);
+                }
+                Some(dfs)
+            }
+            None => None,
+        };
+
+        // 4. Build
+        let inner = Project::finalize_project_creation(config, samples_df, subsamples)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(PyProject { inner })
     }
 
