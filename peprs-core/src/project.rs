@@ -540,12 +540,15 @@ impl Project {
             .as_deref()
             .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX);
 
-        let subsample_table_index = config
-            .subsample_table_index
-            .as_deref()
-            .unwrap_or(DEFAULT_SUBSAMPLE_TABLE_INDEX);
-
         let mut samples_lf = Some(samples_df_raw.clone().lazy());
+
+        // check if sample table has duplicated sample names
+        let sample_col = samples_df_raw.column(sample_table_index)?;
+        let has_duplicates = sample_col.n_unique()? < sample_col.len();
+        if has_duplicates {
+            println!("WARNING: Sample table contains duplicated samples, bugs can appear. \
+                      We strongly encourage using subsample tables!");
+        }
 
         // apply modifiers if they exist and if there is a sample table
         #[allow(clippy::collapsible_if)]
