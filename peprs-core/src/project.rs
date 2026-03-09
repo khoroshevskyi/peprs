@@ -189,6 +189,30 @@ impl Project {
             .map_or(consts::DEFAULT_PEP_VERSION, |cfg| &cfg.pep_version)
     }
 
+    pub fn get_description(&self) -> Option<String> {
+        self.config
+            .as_ref()
+            .map_or(None, |cfg| cfg.description.clone())
+    }
+
+    pub fn get_name(&self) -> Option<String> {
+        self.config
+            .as_ref()
+            .map_or(None, |cfg| cfg.name.clone())
+    }
+
+    pub fn set_description(&mut self, description: Option<String>) {
+        if let Some(ref mut cfg) = self.config {
+            cfg.description = description;
+        }
+    }
+
+    pub fn set_name(&mut self, name: Option<String>) {
+        if let Some(ref mut cfg) = self.config {
+            cfg.name = name;
+        }
+    }
+
     ///
     /// Get the number of samples in the project
     ///
@@ -239,6 +263,13 @@ impl Project {
                 idx,
             )?))
         }
+    }
+
+    ///
+    /// Retrieve multiple a samples by its sample names.
+    ///
+    pub fn get_samples<'a>(&'a self, names: Vec<&str>) -> PolarsResult<Option<Sample<'a>>> {
+        panic!("get_samples not implemented yet!")
     }
 
     ///

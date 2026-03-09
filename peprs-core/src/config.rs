@@ -8,6 +8,8 @@ use crate::consts::DEFAULT_PEP_VERSION;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProjectConfig {
     pub pep_version: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
     pub sample_table: Option<String>,
     pub subsample_table: Option<SubsampleTable>,
     pub sample_table_index: Option<String>,
@@ -144,6 +146,8 @@ impl Default for ProjectConfig {
     fn default() -> Self {
         Self {
             pep_version: String::from(DEFAULT_PEP_VERSION),
+            name: None,
+            description: None,
             sample_table: None,
             subsample_table: None,
             sample_table_index: None,

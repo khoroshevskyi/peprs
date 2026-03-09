@@ -289,6 +289,26 @@ impl PyProject {
     }
 
     #[getter]
+    pub fn get_description(&self) -> PyResult<Option<String>>  {
+        Ok(self.inner.get_description())
+    }
+
+    #[getter]
+    pub fn get_name(&self) -> PyResult<Option<String>> {
+        Ok(self.inner.get_name())
+    }
+
+    #[setter]
+    pub fn set_description(&mut self, description: Option<String>) {
+        self.inner.set_description(description);
+    }
+
+    #[setter]
+    pub fn set_name(&mut self, name: Option<String>) {
+        self.inner.set_name(name);
+    }
+
+    #[getter]
     pub fn get_config(&self) -> PyResult<Py<PyAny>> {
         Python::with_gil(|py| match &self.inner.config {
             Some(config) => {
