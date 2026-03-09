@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use pephub_client::api::Api;
-use peprs_core::consts::DEFAULT_SAMPLE_TABLE_INDEX;
 use peprs_core::config::ProjectConfig;
+use peprs_core::consts::DEFAULT_SAMPLE_TABLE_INDEX;
 use peprs_core::project::Project;
 use polars::io::SerReader;
 use polars::prelude::*;
@@ -71,8 +71,8 @@ impl PyProject {
         let config_obj = pep_dictionary
             .get_item("config")?
             .ok_or_else(|| PyValueError::new_err("Missing 'config' key"))?;
-        let config_value: Value = depythonize(&config_obj)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        let config_value: Value =
+            depythonize(&config_obj).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         let mut config: ProjectConfig = serde_json::from_value(config_value.clone())
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         config.raw = Some(config_value);
@@ -237,10 +237,20 @@ impl PyProject {
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
-    pub fn write_csv(&mut self, path: PathBuf) -> PyResult<()> {
-        self.inner
-            .write_csv(path)
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    pub fn write_csv(&mut self, path: PathBuf, py: Python<'_>) -> PyResult<()> {
+        match self.inner.write_csv(path.clone()) {
+            Ok(()) => Ok(()),
+            Err(_) => {
+                let kwargs = PyDict::new(py);
+                kwargs.set_item("index", false)?;
+                let path_str = path.to_string_lossy().to_string();
+                self.to_polars(Some(false))?
+                    .into_pyobject(py)?
+                    .call_method0("to_pandas")?
+                    .call_method("to_csv", (path_str,), Some(&kwargs))?;
+                Ok(())
+            }
+        }
     }
 
     pub fn print_yaml(&self) -> PyResult<()> {
@@ -255,10 +265,22 @@ impl PyProject {
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
-    pub fn print_csv(&self) -> PyResult<()> {
-        self.inner
-            .print_csv()
-            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    pub fn print_csv(&self, py: Python<'_>) -> PyResult<()> {
+        match self.inner.print_csv() {
+            Ok(()) => Ok(()),
+            Err(_) => {
+                let kwargs = PyDict::new(py);
+                kwargs.set_item("index", false)?;
+                let csv_string = self
+                    .to_polars(Some(false))?
+                    .into_pyobject(py)?
+                    .call_method0("to_pandas")?
+                    .call_method("to_csv", (py.None(),), Some(&kwargs))?
+                    .extract::<String>()?;
+                println!("{}", csv_string);
+                Ok(())
+            }
+        }
     }
 
     #[getter]

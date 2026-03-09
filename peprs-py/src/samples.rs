@@ -52,7 +52,9 @@ impl PySamplesIter {
         let len = project.inner.samples.height() as isize;
         let idx = if index < 0 { index + len } else { index };
         if idx < 0 || idx >= len {
-            return Err(pyo3::exceptions::PyIndexError::new_err("sample index out of range"));
+            return Err(pyo3::exceptions::PyIndexError::new_err(
+                "sample index out of range",
+            ));
         }
         let sample = Sample::from_dataframe_row(&project.inner.samples, idx as usize)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
