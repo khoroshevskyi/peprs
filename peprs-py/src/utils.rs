@@ -1,5 +1,6 @@
 use polars::prelude::*;
 use pyo3::prelude::*;
+use pyo3::types::PyList;
 
 pub fn anyvalue_to_pyobject(py: Python<'_>, value: &AnyValue) -> PyObject {
     match value {
@@ -17,6 +18,13 @@ pub fn anyvalue_to_pyobject(py: Python<'_>, value: &AnyValue) -> PyObject {
         AnyValue::Float64(f) => f.into_pyobject(py).unwrap().into_any().unbind(),
         AnyValue::String(s) => s.into_pyobject(py).unwrap().into_any().unbind(),
         AnyValue::StringOwned(s) => s.as_str().into_pyobject(py).unwrap().into_any().unbind(),
+        AnyValue::List(series) => {
+            let items: Vec<PyObject> = series
+                .iter()
+                .map(|v| anyvalue_to_pyobject(py, &v))
+                .collect();
+            PyList::new(py, &items).unwrap().into_any().unbind()
+        }
         _ => value
             .to_string()
             .into_pyobject(py)
