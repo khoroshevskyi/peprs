@@ -234,11 +234,10 @@ impl Project {
                 &self.samples,
                 idx.first().unwrap().clone(),
             )?)),
-            _ => {
-                println!("More then one sample found. Returning first sample");
-                // Ok(Some(found_samples_count))
-                Ok(None)
-            }
+            _ => Ok(Some(Sample::from_df_duplicated_rows(
+                &self.samples,
+                idx,
+            )?))
         }
     }
 
@@ -637,10 +636,6 @@ impl Project {
                         new_lf = new_lf.with_column(final_expr.alias(col_to_derive));
                     }
                 }
-
-                // TODO: collapse samples if duplicated samples
-                // In polars it seems impossible, and hard to achieve.
-                // Maybe we can do it using function .get_sample() ? so it will be done only this way
 
                 // after all potential modifications, re-assign
                 samples_lf = Some(new_lf)

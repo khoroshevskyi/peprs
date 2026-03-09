@@ -26,6 +26,44 @@ impl<'a> Sample<'a> {
     }
 
     ///
+    /// Create a new Sample by merging multiple rows with the same sample name.
+    ///
+    /// Columns where all values are identical are stored as scalars.
+    /// Columns where values differ are collapsed into a list.
+    ///
+    pub fn from_df_duplicated_rows(df: &'a DataFrame, row_indexs: Vec<usize>) -> PolarsResult<Self> {
+        if row_indexs.len() == 1 {
+            return Self::from_dataframe_row(df, row_indexs[0]);
+        }
+
+        let mut sample = HashMap::new();
+
+        for (col_idx, series) in df.get_columns().iter().enumerate() {
+            let column_name = df.get_column_names()[col_idx].to_string();
+
+            let values: Vec<AnyValue> = row_indexs
+                .iter()
+                .map(|&ri| series.get(ri))
+                .collect::<PolarsResult<Vec<_>>>()?;
+
+            let all_same = values.windows(2).all(|w| w[0] == w[1]);
+
+            if all_same {
+                sample.insert(column_name, values.into_iter().next().unwrap());
+            } else {
+                let list_series = Series::from_any_values(
+                    PlSmallStr::from_str(&column_name),
+                    &values,
+                    false,
+                )?;
+                sample.insert(column_name, AnyValue::List(list_series));
+            }
+        }
+
+        Ok(Sample(sample))
+    }
+
+    ///
     /// Convert the Sample into an owned HashMap, via cloning
     ///
     pub fn into_map(self) -> HashMap<String, String> {
