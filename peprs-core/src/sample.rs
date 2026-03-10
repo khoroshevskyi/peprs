@@ -31,7 +31,10 @@ impl<'a> Sample<'a> {
     /// Columns where all values are identical are stored as scalars.
     /// Columns where values differ are collapsed into a list.
     ///
-    pub fn from_df_duplicated_rows(df: &'a DataFrame, row_indexs: Vec<usize>) -> PolarsResult<Self> {
+    pub fn from_df_duplicated_rows(
+        df: &'a DataFrame,
+        row_indexs: Vec<usize>,
+    ) -> PolarsResult<Self> {
         if row_indexs.len() == 1 {
             return Self::from_dataframe_row(df, row_indexs[0]);
         }
@@ -51,11 +54,8 @@ impl<'a> Sample<'a> {
             if all_same {
                 sample.insert(column_name, values.into_iter().next().unwrap());
             } else {
-                let list_series = Series::from_any_values(
-                    PlSmallStr::from_str(&column_name),
-                    &values,
-                    false,
-                )?;
+                let list_series =
+                    Series::from_any_values(PlSmallStr::from_str(&column_name), &values, false)?;
                 sample.insert(column_name, AnyValue::List(list_series));
             }
         }

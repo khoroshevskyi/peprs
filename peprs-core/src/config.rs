@@ -1,7 +1,8 @@
-use std::collections::HashMap;
-
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
+use std::path::Path;
 
 use crate::consts::DEFAULT_PEP_VERSION;
 
@@ -159,6 +160,48 @@ impl Default for ProjectConfig {
     }
 }
 
-pub fn config_to_value(config: &ProjectConfig) -> Result<Value, serde_json::Error> {
-    serde_json::to_value(&config.raw)
+impl ProjectConfig {
+    pub(crate) fn get_raw_config(
+        &self,
+        sample_table: Option<&str>,
+        subsample_table: Option<Vec<&str>>,
+    ) -> Option<Value> {
+        if let Some(raw) = &self.raw {
+            let mut config = raw.clone();
+            config["name"] = Value::String(self.name.clone().unwrap_or_default());
+            config["description"] = Value::String(self.description.clone().unwrap_or_default());
+            config["pep_version"] = Value::String(self.pep_version.clone());
+
+            if let Some(val) = sample_table {
+                config["sample_table"] = Value::String(val.to_string());
+            }
+            if let Some(val) = subsample_table {
+                config["subsample_table"] = serde_json::json!(val);
+            }
+
+            return Some(config);
+        }
+        None
+    }
+
+    ///
+    /// Save config as yaml
+    ///
+    pub fn save_yaml<P: AsRef<Path>>(
+        &self,
+        path: P,
+        sample_table: Option<&str>,
+        subsample_table: Option<Vec<&str>>,
+    ) -> Result<()> {
+        let new_config = self.get_raw_config(sample_table, subsample_table);
+        if let Some(config) = new_config {
+            let file = std::fs::File::create(path.as_ref())?;
+            serde_yaml::to_writer(file, &config)?;
+        }
+        Ok(())
+    }
+}
+
+pub fn config_to_value(config: &ProjectConfig) -> Result<Value> {
+    Ok(serde_json::to_value(&config.raw)?)
 }

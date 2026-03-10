@@ -21,6 +21,7 @@ impl std::convert::From<PeprsCoreError> for pyo3::PyErr {
             peprs_core::error::Error::Json(_) => {
                 PyValueError::new_err(format!("JSON error: {}", value.0))
             }
+            peprs_core::error::Error::Zip(error) => PyIOError::new_err(error.to_string()),
         }
     }
 }

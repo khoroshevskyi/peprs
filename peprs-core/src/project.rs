@@ -109,8 +109,11 @@ impl ProjectBuilder {
                     .sample_table_index
                     .unwrap_or_else(|| DEFAULT_SAMPLE_TABLE_INDEX.to_string());
 
+                let mut new_config = ProjectConfig::default();
+                new_config.raw = Some(serde_json::Value::Object(serde_json::Map::new()));
+
                 Ok(Project {
-                    config: None,
+                    config: Some(new_config),
                     samples: df.clone(),
                     samples_raw: df,
                     subsamples: None,
@@ -196,9 +199,7 @@ impl Project {
     }
 
     pub fn get_name(&self) -> Option<String> {
-        self.config
-            .as_ref()
-            .map_or(None, |cfg| cfg.name.clone())
+        self.config.as_ref().map_or(None, |cfg| cfg.name.clone())
     }
 
     pub fn set_description(&mut self, description: Option<String>) {
@@ -258,10 +259,7 @@ impl Project {
                 &self.samples,
                 idx.first().unwrap().clone(),
             )?)),
-            _ => Ok(Some(Sample::from_df_duplicated_rows(
-                &self.samples,
-                idx,
-            )?))
+            _ => Ok(Some(Sample::from_df_duplicated_rows(&self.samples, idx)?)),
         }
     }
 
@@ -356,35 +354,114 @@ impl Project {
         Ok(())
     }
 
-    pub fn write_raw<P: AsRef<Path>>(&mut self, path: P, zip: Option<bool>) -> Result<(), Error> {
-        let zip = zip.unwrap_or(false);
+    pub fn write_raw<P: AsRef<Path>>(
+        &mut self,
+        path: P,
+        zipped: Option<bool>,
+    ) -> Result<(), Error> {
+        let zipped = zipped.unwrap_or(false);
 
-        match zip {
-            true => {
-                self.write_raw_zip(path)
-            },
-            false => {
-                self.write_raw_folder(path)
-            }
+        match zipped {
+            true => self.write_raw_zip(path),
+            false => self.write_raw_folder(path),
         }
     }
 
     pub fn write_raw_folder<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
-        // If not zipped:
-        // 1. create a folder (project_name from config)
-        // 2. save csv (raw samples)
-        // 3. save subsamples (each subsample table)
-        // 3. save config pointing to csv
-        Err(Error::processing("write_raw_folder is not yet implemented"))
+        let project_name = self.get_name().unwrap_or("default_name".to_string());
+
+        let folder = path.as_ref().join(&project_name);
+        std::fs::create_dir_all(&folder)?;
+
+        // Save raw samples CSV
+        let sample_table_name = "sample_table.csv";
+        let sample_table_path = folder.join(sample_table_name);
+        let mut sample_file = File::create(&sample_table_path)?;
+        CsvWriter::new(&mut sample_file)
+            .include_header(true)
+            .with_separator(b',')
+            .finish(&mut self.samples_raw)?;
+
+        // Save subsample tables
+        let mut subsample_names: Vec<&str> = Vec::new();
+        if let Some(ref mut sub_dfs) = self.subsamples {
+            for (i, sub_df) in sub_dfs.iter_mut().enumerate() {
+                let sub_name = format!("subsample_table_{}.csv", i + 1);
+                let sub_path = folder.join(&sub_name);
+                let mut sub_file = File::create(&sub_path)?;
+                CsvWriter::new(&mut sub_file)
+                    .include_header(true)
+                    .with_separator(b',')
+                    .finish(sub_df)?;
+                subsample_names.push(Box::leak(sub_name.into_boxed_str()));
+            }
+        }
+
+        // Save config YAML pointing to the CSV files
+        let config_path = folder.join("project_config.yaml");
+        if let Some(ref config) = self.config {
+            let subsample_arg = if subsample_names.is_empty() {
+                None
+            } else {
+                Some(subsample_names)
+            };
+            config.save_yaml(&config_path, Some(sample_table_name), subsample_arg)?;
+        }
+
+        Ok(())
     }
 
     pub fn write_raw_zip<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
-        // If not zipped:
-        // 1. create a folder
-        // 2. save csv
-        // 3. save subsamples
-        // 3. save config pointing to csv
-        Err(Error::processing("write_raw_zip is not yet implemented"))
+        use ::zip::write::SimpleFileOptions;
+        use ::zip::{CompressionMethod, ZipWriter};
+
+        let file = File::create(path.as_ref())?;
+        let mut zip = ZipWriter::new(file);
+        let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+
+        // Write sample table CSV into zip
+        let sample_table_name = "sample_table.csv";
+        let mut sample_buf = Vec::new();
+        CsvWriter::new(&mut sample_buf)
+            .include_header(true)
+            .with_separator(b',')
+            .finish(&mut self.samples_raw)?;
+        zip.start_file(sample_table_name, options)?;
+        zip.write_all(&sample_buf)?;
+
+        // Write subsample tables into zip
+        let mut subsample_names: Vec<String> = Vec::new();
+        if let Some(ref mut sub_dfs) = self.subsamples {
+            for (i, sub_df) in sub_dfs.iter_mut().enumerate() {
+                let sub_name = format!("subsample_table_{}.csv", i + 1);
+                let mut sub_buf = Vec::new();
+                CsvWriter::new(&mut sub_buf)
+                    .include_header(true)
+                    .with_separator(b',')
+                    .finish(sub_df)?;
+                zip.start_file(&sub_name, options)?;
+                zip.write_all(&sub_buf)?;
+                subsample_names.push(sub_name);
+            }
+        }
+
+        // Write config YAML into zip
+        if let Some(ref config) = self.config {
+            let subsample_arg: Option<Vec<&str>> = if subsample_names.is_empty() {
+                None
+            } else {
+                Some(subsample_names.iter().map(|s| s.as_str()).collect())
+            };
+            let raw_config = config.get_raw_config(Some(sample_table_name), subsample_arg);
+            if let Some(config_value) = raw_config {
+                let yaml = serde_yaml::to_string(&config_value)?;
+                zip.start_file("project_config.yaml", options)?;
+                zip.write_all(yaml.as_bytes())?;
+            }
+        }
+
+        zip.finish()?;
+        Ok(())
     }
 
     pub fn write_config_json<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
@@ -576,8 +653,10 @@ impl Project {
         let sample_col = samples_df_raw.column(sample_table_index)?;
         let has_duplicates = sample_col.n_unique()? < sample_col.len();
         if has_duplicates {
-            println!("WARNING: Sample table contains duplicated samples, bugs can appear. \
-                      We strongly encourage using subsample tables!");
+            println!(
+                "WARNING: Sample table contains duplicated samples, bugs can appear. \
+                      We strongly encourage using subsample tables!"
+            );
         }
 
         // apply modifiers if they exist and if there is a sample table

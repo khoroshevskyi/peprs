@@ -38,6 +38,10 @@ pub enum Error {
     /// JSON serialization/deserialization errors
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
+
+    /// Zip archive errors
+    #[error("Zip error: {0}")]
+    Zip(#[from] zip::result::ZipError),
 }
 
 /// Result type alias for convenience

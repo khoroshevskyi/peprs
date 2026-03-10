@@ -253,6 +253,13 @@ impl PyProject {
         }
     }
 
+    #[pyo3(signature = (path, zipped=false))]
+    pub fn write_raw(&mut self, path: PathBuf, zipped: bool) -> PyResult<()> {
+        self.inner
+            .write_raw(path, Some(zipped))
+            .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
+    }
+
     pub fn print_yaml(&self) -> PyResult<()> {
         self.inner
             .print_yaml()
@@ -289,7 +296,7 @@ impl PyProject {
     }
 
     #[getter]
-    pub fn get_description(&self) -> PyResult<Option<String>>  {
+    pub fn get_description(&self) -> PyResult<Option<String>> {
         Ok(self.inner.get_description())
     }
 
