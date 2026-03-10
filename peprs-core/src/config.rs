@@ -6,6 +6,9 @@ use std::path::Path;
 
 use crate::consts::DEFAULT_PEP_VERSION;
 
+///
+/// Top-level PEP project configuration parsed from a YAML file.
+///
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProjectConfig {
     pub pep_version: String,
@@ -20,6 +23,9 @@ pub struct ProjectConfig {
     pub raw: Option<Value>,
 }
 
+///
+/// Path(s) to subsample table(s) — either a single path or multiple.
+///
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum SubsampleTable {
@@ -27,6 +33,9 @@ pub enum SubsampleTable {
     Multiple(Vec<String>),
 }
 
+///
+/// Index column name(s) for subsample tables — single or multiple.
+///
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum SubsampleTableIndex {
@@ -34,6 +43,9 @@ pub enum SubsampleTableIndex {
     Multiple(Vec<String>),
 }
 
+///
+/// Sample-level modifiers: remove, append, duplicate, imply, derive.
+///
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SampleModifiers {
     pub remove: Option<Vec<String>>,
@@ -43,6 +55,9 @@ pub struct SampleModifiers {
     pub derive: Option<DeriveRule>,
 }
 
+///
+/// A conditional rule: if a column matches a value, set other columns.
+///
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ImplyRule {
     #[serde(rename = "if")]
@@ -51,6 +66,9 @@ pub struct ImplyRule {
     pub then_action: HashMap<String, String>,
 }
 
+///
+/// Condition value(s) for an imply rule — single value or list.
+///
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum ImplyCondition {
@@ -58,18 +76,27 @@ pub enum ImplyCondition {
     Multiple(Vec<String>),
 }
 
+///
+/// Rule for deriving new column values from template strings.
+///
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeriveRule {
     pub attributes: Vec<String>,
     pub sources: HashMap<String, String>,
 }
 
+///
+/// Project-level modifiers: imports and amendments.
+///
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProjectModifiers {
     pub import: Option<Vec<String>>,
     pub amend: Option<HashMap<String, AmendVariant>>,
 }
 
+///
+/// A named amendment variant that can override config sections.
+///
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AmendVariant {
     pub sample_table: Option<String>,
@@ -83,7 +110,15 @@ pub struct AmendVariant {
 impl ProjectConfig {
     ///
     /// Apply an amendment to the project configuration
-    /// given an amend variant
+    /// given an amend variant.
+    ///
+    /// # Arguments
+    ///
+    /// * `amendment` - The amendment variant to apply.
+    ///
+    /// # Returns
+    ///
+    /// The modified `ProjectConfig` with amendment fields overridden.
     ///
     pub fn with_amendment(mut self, amendment: AmendVariant) -> Self {
         if let Some(val) = amendment.sample_table {
@@ -112,8 +147,16 @@ impl ProjectConfig {
     }
 
     ///
-    /// Merge the current project configuration with another one. This
-    /// is useful for import project modifiers
+    /// Merge the current project configuration with another one.
+    /// Useful for import project modifiers.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - The config to merge in. Non-`None` fields override `self`.
+    ///
+    /// # Returns
+    ///
+    /// The merged `ProjectConfig`.
     ///
     pub fn with_merge(mut self, other: ProjectConfig) -> Self {
         // the `pep_version` is a required field, so we always take the value from `other`.
@@ -161,7 +204,7 @@ impl Default for ProjectConfig {
 }
 
 impl ProjectConfig {
-    pub(crate) fn get_raw_config(
+    pub fn get_raw_config(
         &self,
         sample_table: Option<&str>,
         subsample_table: Option<Vec<&str>>,
@@ -185,7 +228,17 @@ impl ProjectConfig {
     }
 
     ///
-    /// Save config as yaml
+    /// Save the config as a YAML file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination file path.
+    /// * `sample_table` - Optional sample table filename to embed in config.
+    /// * `subsample_table` - Optional subsample table filenames to embed in config.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` on success, or an error if serialization/IO fails.
     ///
     pub fn save_yaml<P: AsRef<Path>>(
         &self,
@@ -202,6 +255,17 @@ impl ProjectConfig {
     }
 }
 
+///
+/// Converts the raw config to a JSON [`Value`].
+///
+/// # Arguments
+///
+/// * `config` - The project config to convert.
+///
+/// # Returns
+///
+/// The raw config as a JSON `Value`, or an error if serialization fails.
+///
 pub fn config_to_value(config: &ProjectConfig) -> Result<Value> {
     Ok(serde_json::to_value(&config.raw)?)
 }

@@ -50,12 +50,18 @@ enum ProjectSource {
     },
 }
 
+///
+/// Builder for configuring and constructing a [`Project`].
+///
 pub struct ProjectBuilder {
     source: ProjectSource,
     amendments: Option<Vec<String>>,
     sample_table_index: Option<String>,
 }
 
+///
+/// A loaded PEP project with processed samples and configuration.
+///
 pub struct Project {
     pub config: Option<ProjectConfig>,
     pub samples: DataFrame,
@@ -68,6 +74,14 @@ impl ProjectBuilder {
     ///
     /// Specify a list of amendments to activate when building the project.
     ///
+    /// # Arguments
+    ///
+    /// * `amendments` - Amendment names to activate.
+    ///
+    /// # Returns
+    ///
+    /// The builder with amendments set.
+    ///
     pub fn with_amendments(mut self, amendments: &[String]) -> Self {
         self.amendments = Some(amendments.to_vec());
         self
@@ -76,14 +90,27 @@ impl ProjectBuilder {
     ///
     /// Specify a custom sample table index column name.
     ///
+    /// # Arguments
+    ///
+    /// * `index` - Column name to use as the sample table index.
+    ///
+    /// # Returns
+    ///
+    /// The builder with the custom index set.
+    ///
     pub fn with_sample_table_index(mut self, index: String) -> Self {
         self.sample_table_index = Some(index);
         self
     }
 
-    /// Construct the `Project` using the specified configuration.
     ///
+    /// Construct the [`Project`] using the specified configuration.
     /// This is the final step that will perform file I/O and parsing.
+    ///
+    /// # Returns
+    ///
+    /// The fully constructed `Project`, or an error if loading/parsing fails.
+    ///
     pub fn build(self) -> Result<Project, Error> {
         match self.source {
             ProjectSource::Path(path) => {
@@ -136,8 +163,17 @@ impl ProjectBuilder {
 }
 
 impl Project {
+    ///
     /// Create a project from a CSV file.
-    /// This will load the CSV into a DataFrame and return a builder.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the CSV file.
+    ///
+    /// # Returns
+    ///
+    /// A [`ProjectBuilder`] preloaded with the CSV data.
+    ///
     pub fn from_csv<P: AsRef<Path>>(path: P) -> Result<ProjectBuilder, Error> {
         let df = LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
             .with_has_header(true)
@@ -155,7 +191,16 @@ impl Project {
 
     ///
     /// Create a project from a YAML configuration file.
-    /// This returns a builder that will process the file upon `.build()`.
+    /// The file is read upon calling `.build()`.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the YAML config file.
+    ///
+    /// # Returns
+    ///
+    /// A [`ProjectBuilder`] targeting the given config path.
+    ///
     pub fn from_config<P: AsRef<Path>>(path: P) -> ProjectBuilder {
         ProjectBuilder {
             source: ProjectSource::Path(path.as_ref().to_path_buf()),
@@ -166,6 +211,15 @@ impl Project {
 
     ///
     /// Create a project from an in-memory Polars DataFrame.
+    ///
+    /// # Arguments
+    ///
+    /// * `df` - The DataFrame containing sample data.
+    ///
+    /// # Returns
+    ///
+    /// A [`ProjectBuilder`] wrapping the given DataFrame.
+    ///
     pub fn from_dataframe(df: DataFrame) -> ProjectBuilder {
         ProjectBuilder {
             source: ProjectSource::DataFrame(df),
@@ -174,6 +228,18 @@ impl Project {
         }
     }
 
+    ///
+    /// Create a project from in-memory config and samples DataFrame.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The project configuration.
+    /// * `samples` - The samples DataFrame.
+    ///
+    /// # Returns
+    ///
+    /// A [`ProjectBuilder`] wrapping the given config and samples.
+    ///
     pub fn from_memory(config: ProjectConfig, samples: DataFrame) -> ProjectBuilder {
         ProjectBuilder {
             source: ProjectSource::InMemory { config, samples },
@@ -183,8 +249,11 @@ impl Project {
     }
 
     ///
-    /// Get the pep version in the config if it exists
-    /// otherwise return the default version
+    /// Get the PEP version from the config, or the default version.
+    ///
+    /// # Returns
+    ///
+    /// The PEP version string.
     ///
     pub fn get_pep_version(&self) -> &str {
         self.config
@@ -192,22 +261,50 @@ impl Project {
             .map_or(consts::DEFAULT_PEP_VERSION, |cfg| &cfg.pep_version)
     }
 
+    ///
+    /// Get the project description from the config, if set.
+    ///
+    /// # Returns
+    ///
+    /// The description string, or `None` if not set.
+    ///
     pub fn get_description(&self) -> Option<String> {
         self.config
             .as_ref()
             .map_or(None, |cfg| cfg.description.clone())
     }
 
+    ///
+    /// Get the project name from the config, if set.
+    ///
+    /// # Returns
+    ///
+    /// The project name, or `None` if not set.
+    ///
     pub fn get_name(&self) -> Option<String> {
         self.config.as_ref().map_or(None, |cfg| cfg.name.clone())
     }
 
+    ///
+    /// Set the project description in the config.
+    ///
+    /// # Arguments
+    ///
+    /// * `description` - The new description, or `None` to clear it.
+    ///
     pub fn set_description(&mut self, description: Option<String>) {
         if let Some(ref mut cfg) = self.config {
             cfg.description = description;
         }
     }
 
+    ///
+    /// Set the project name in the config.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The new name, or `None` to clear it.
+    ///
     pub fn set_name(&mut self, name: Option<String>) {
         if let Some(ref mut cfg) = self.config {
             cfg.name = name;
@@ -215,14 +312,22 @@ impl Project {
     }
 
     ///
-    /// Get the number of samples in the project
+    /// Get the number of samples in the project.
+    ///
+    /// # Returns
+    ///
+    /// The sample count.
     ///
     pub fn len(&self) -> usize {
         self.samples.height()
     }
 
     ///
-    /// Check if the project contains no samples
+    /// Check if the project contains no samples.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the project has zero samples.
     ///
     pub fn is_empty(&self) -> bool {
         self.samples.is_empty()
@@ -230,6 +335,14 @@ impl Project {
 
     ///
     /// Retrieve a sample by its sample name.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The sample name to look up.
+    ///
+    /// # Returns
+    ///
+    /// `Some(Sample)` if found, `None` if no match. Duplicates are merged.
     ///
     pub fn get_sample<'a>(&'a self, name: &str) -> PolarsResult<Option<Sample<'a>>> {
         let mask = self
@@ -264,14 +377,31 @@ impl Project {
     }
 
     ///
-    /// Retrieve multiple a samples by its sample names.
+    /// Retrieve multiple samples by their sample names.
+    ///
+    /// # Arguments
+    ///
+    /// * `names` - The sample names to look up.
+    ///
+    /// # Returns
+    ///
+    /// `Some(Sample)` if found, `None` if no match.
     ///
     pub fn get_samples<'a>(&'a self, names: Vec<&str>) -> PolarsResult<Option<Sample<'a>>> {
         panic!("get_samples not implemented yet!")
     }
 
     ///
-    /// The main entry point for loading the project configuration
+    /// Load and parse the project configuration from a YAML file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the YAML config file.
+    /// * `amendments` - Optional list of amendment names to activate.
+    ///
+    /// # Returns
+    ///
+    /// The parsed `ProjectConfig` with imports and amendments applied.
     ///
     pub fn load_project_config(
         path: impl AsRef<Path>,
@@ -293,6 +423,13 @@ impl Project {
         Self::parse_and_apply_project_modifiers(config, parent_dir, amendments)
     }
 
+    ///
+    /// Write processed samples to a JSON file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination file path.
+    ///
     pub fn write_json<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         let file = File::create(path.as_ref())?;
 
@@ -314,6 +451,13 @@ impl Project {
         Ok(())
     }
 
+    ///
+    /// Write processed samples to a YAML file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination file path.
+    ///
     pub fn write_yaml<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         println!("Converting project to yaml file");
         if self.samples.height() > 100000 {
@@ -339,6 +483,13 @@ impl Project {
         Ok(())
     }
 
+    ///
+    /// Write processed samples to a CSV file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination file path.
+    ///
     pub fn write_csv<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         let mut file = File::create(path.as_ref())?;
 
@@ -354,6 +505,14 @@ impl Project {
         Ok(())
     }
 
+    ///
+    /// Write raw project data to a folder or zip archive.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination path.
+    /// * `zipped` - If `Some(true)`, write as a zip archive; otherwise as a folder.
+    ///
     pub fn write_raw<P: AsRef<Path>>(
         &mut self,
         path: P,
@@ -367,6 +526,13 @@ impl Project {
         }
     }
 
+    ///
+    /// Write raw project (config, samples, subsamples) to a folder.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination folder path (created if missing).
+    ///
     pub fn write_raw_folder<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         let project_name = self.get_name().unwrap_or("default_name".to_string());
 
@@ -411,6 +577,13 @@ impl Project {
         Ok(())
     }
 
+    ///
+    /// Write raw project (config, samples, subsamples) to a zip archive.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination zip file path.
+    ///
     pub fn write_raw_zip<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         use ::zip::write::SimpleFileOptions;
         use ::zip::{CompressionMethod, ZipWriter};
@@ -464,6 +637,13 @@ impl Project {
         Ok(())
     }
 
+    ///
+    /// Write the raw project config as a JSON file into the given directory.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Directory to write `project_config.json` into.
+    ///
     pub fn write_config_json<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         if let Some(ref config) = self.config {
             if let Some(ref raw) = config.raw {
@@ -476,6 +656,13 @@ impl Project {
         Ok(())
     }
 
+    ///
+    /// Write the raw project config as a YAML file into the given directory.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Directory to write `project_config.yaml` into.
+    ///
     pub fn write_config_yaml<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         if let Some(ref config) = self.config {
             if let Some(ref raw) = config.raw {
@@ -488,6 +675,9 @@ impl Project {
         Ok(())
     }
 
+    ///
+    /// Print processed samples as JSON to stdout (max 1K samples).
+    ///
     pub fn print_json(&self) -> Result<(), Error> {
         if self.samples.height() > 1000 {
             println!("Project has more than 1K samples; unable to print. Use `save_json` instead.");
@@ -505,6 +695,9 @@ impl Project {
         Ok(())
     }
 
+    ///
+    /// Print processed samples as YAML to stdout (max 1K samples).
+    ///
     pub fn print_yaml(&self) -> Result<(), Error> {
         if self.samples.height() > 1000 {
             println!("Project has more than 1K samples; unable to print. Use `save_yaml` instead.");
@@ -523,6 +716,9 @@ impl Project {
         Ok(())
     }
 
+    ///
+    /// Print processed samples as CSV to stdout (max 1K samples).
+    ///
     pub fn print_csv(&self) -> Result<(), Error> {
         if self.samples.height() > 1000 {
             println!("Project has more than 1K samples; unable to print. Use `save_csv` instead.");
@@ -542,8 +738,17 @@ impl Project {
     }
 
     ///
-    /// Recursive helper function that consumes and returns a config
-    /// after applying and potential project modifiers
+    /// Recursively apply project modifiers (imports, amendments) to a config.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The config to modify.
+    /// * `base_path` - Base directory for resolving relative import paths.
+    /// * `amendments_to_activate` - Optional amendment names to apply.
+    ///
+    /// # Returns
+    ///
+    /// The config with all imports merged and amendments applied.
     ///
     fn parse_and_apply_project_modifiers(
         mut config: ProjectConfig,
@@ -587,8 +792,16 @@ impl Project {
     }
 
     ///
-    /// Create new Project object after parsing the project config. This
-    /// is an internal function to enable moer abstact wrappers
+    /// Create a new Project from a parsed config by loading sample/subsample CSVs.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The parsed project configuration.
+    /// * `config_dir` - Directory for resolving relative table paths.
+    ///
+    /// # Returns
+    ///
+    /// A fully constructed `Project`, or an error.
     ///
     fn new_from_parsed_config<P>(config: ProjectConfig, config_dir: P) -> Result<Self, Error>
     where
@@ -634,9 +847,18 @@ impl Project {
     }
 
     ///
-    /// Finally parse and create the project. This takes a parsed project configuration,
-    /// and a raw sample table (as a [`DataFrame`]) and then applies all sample modifiers
-    /// and merges subsamples.
+    /// Finalize project creation by applying sample modifiers and merging subsamples.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The parsed project configuration.
+    /// * `samples_df_raw` - The raw sample table as a DataFrame.
+    /// * `subsamples` - Optional subsample DataFrames to merge.
+    ///
+    /// # Returns
+    ///
+    /// A fully constructed `Project`, or an error.
+    ///
     pub fn finalize_project_creation(
         config: ProjectConfig,
         samples_df_raw: DataFrame,
@@ -775,6 +997,7 @@ impl Project {
         })
     }
 
+    ///
     /// Merge subsample DataFrames into the samples LazyFrame.
     ///
     /// For each subsample table:
@@ -782,6 +1005,17 @@ impl Project {
     /// 2. Left-join onto samples
     /// 3. For overlapping columns, subsample list replaces the sample value;
     ///    samples without subsamples get their original value wrapped in a single-element list
+    ///
+    /// # Arguments
+    ///
+    /// * `samples_lf` - The samples LazyFrame to merge into.
+    /// * `subsamples` - Subsample DataFrames to merge.
+    /// * `sample_table_index` - Column name used as the join key.
+    ///
+    /// # Returns
+    ///
+    /// The merged LazyFrame with subsample columns as lists.
+    ///
     fn merge_subsamples(
         samples_lf: LazyFrame,
         subsamples: &[DataFrame],
@@ -845,19 +1079,38 @@ impl Project {
     }
 
     ///
-    /// Iterate over the samples in the project
+    /// Iterate over the processed samples in the project.
+    ///
+    /// # Returns
+    ///
+    /// A [`SamplesIter`] over processed samples.
     ///
     pub fn iter_samples(&'_ self) -> SamplesIter<'_> {
         SamplesIter::new(&self.samples)
     }
 
     ///
-    /// Iterate over the raw, unprocessed samples in the project
+    /// Iterate over the raw, unprocessed samples in the project.
+    ///
+    /// # Returns
+    ///
+    /// A [`SamplesIter`] over raw samples (before modifiers).
     ///
     pub fn iter_samples_raw(&'_ self) -> SamplesIter<'_> {
         SamplesIter::new(&self.samples_raw)
     }
 
+    ///
+    /// Generate a WDL input JSON string by mapping sample columns to WDL inputs.
+    ///
+    /// # Arguments
+    ///
+    /// * `options` - WDL input parsing options (source file, name, etc.).
+    ///
+    /// # Returns
+    ///
+    /// A pretty-printed JSON string of mapped WDL inputs per sample.
+    ///
     #[cfg(feature = "wdl")]
     pub fn to_mapped_wdl_input(&self, options: WdlInputParsingOptions) -> Result<String, Error> {
         use serde_json::{Map, Value};

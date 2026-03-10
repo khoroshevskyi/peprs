@@ -20,6 +20,9 @@ use crate::error::PeprsCoreError;
 use crate::samples::PySamplesIter;
 use crate::utils::anyvalue_to_pyobject;
 
+///
+/// Python-exposed PEP project, wrapping a [`Project`] from peprs-core.
+///
 #[pyclass(name = "Project")]
 pub struct PyProject {
     pub inner: Project,
@@ -27,6 +30,17 @@ pub struct PyProject {
 
 #[pymethods]
 impl PyProject {
+    ///
+    /// Create a new Project from a YAML config or CSV file path.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to a `.yaml`/`.yml` config or `.csv` sample table.
+    ///
+    /// # Returns
+    ///
+    /// A new `PyProject`, or an error if the file format is unsupported.
+    ///
     #[new]
     pub fn py_new(path: String) -> Result<Self, PeprsCoreError> {
         // if yaml file, assume config
@@ -45,6 +59,18 @@ impl PyProject {
         }
     }
 
+    ///
+    /// Create a Project from a Polars DataFrame.
+    ///
+    /// # Arguments
+    ///
+    /// * `df` - A Polars DataFrame with sample data.
+    /// * `sample_table_index` - Optional column name for the sample index (default: `"sample_name"`).
+    ///
+    /// # Returns
+    ///
+    /// A new `PyProject`.
+    ///
     #[classmethod]
     #[pyo3(signature = (df, sample_table_index=None))]
     pub fn from_polars(
@@ -61,6 +87,18 @@ impl PyProject {
         Ok(PyProject { inner })
     }
 
+    ///
+    /// Create a Project from a Python dict with `config`, `samples`, and optional `subsamples` keys.
+    ///
+    /// # Arguments
+    ///
+    /// * `pep_dictionary` - A Python dict with keys `"config"`, `"samples"`, and optionally `"subsamples"`.
+    /// * `py` - The Python GIL token.
+    ///
+    /// # Returns
+    ///
+    /// A new `PyProject`.
+    ///
     #[classmethod]
     pub fn from_dict(
         _cls: &Bound<'_, PyType>,
@@ -105,6 +143,17 @@ impl PyProject {
         Ok(PyProject { inner })
     }
 
+    ///
+    /// Create a Project from a PepHub registry path.
+    ///
+    /// # Arguments
+    ///
+    /// * `registry` - The PepHub registry path (e.g. `"namespace/name:tag"`).
+    ///
+    /// # Returns
+    ///
+    /// A new `PyProject` loaded from PepHub.
+    ///
     #[classmethod]
     #[pyo3(signature = (registry))]
     pub fn from_pephub(_cls: &Bound<'_, PyType>, registry: String) -> Result<Self, PeprsCoreError> {
@@ -132,6 +181,18 @@ impl PyProject {
         }
     }
 
+    ///
+    /// Convert the project to a Python dict.
+    ///
+    /// # Arguments
+    ///
+    /// * `raw` - If `true`, include raw config/samples/subsamples; otherwise processed samples only.
+    /// * `by_sample` - If `true`, samples are a list of row-dicts; if `false`, a column-dict.
+    ///
+    /// # Returns
+    ///
+    /// A Python dict with `"config"`, `"samples"`, and optionally `"subsamples"` keys.
+    ///
     #[pyo3(signature = (raw=false, by_sample=true))]
     pub fn to_dict(
         &self,
@@ -206,6 +267,17 @@ impl PyProject {
         }
     }
 
+    ///
+    /// Return the samples as a Polars DataFrame.
+    ///
+    /// # Arguments
+    ///
+    /// * `raw` - If `true`, return raw (unprocessed) samples; otherwise processed.
+    ///
+    /// # Returns
+    ///
+    /// A Polars `DataFrame`.
+    ///
     #[pyo3(signature = (raw=false))]
     pub fn to_polars(&self, raw: Option<bool>) -> PyResult<PyDataFrame> {
         let raw = raw.unwrap_or(false);
@@ -215,6 +287,17 @@ impl PyProject {
         }
     }
 
+    ///
+    /// Return the samples as a Pandas DataFrame.
+    ///
+    /// # Arguments
+    ///
+    /// * `raw` - If `true`, return raw (unprocessed) samples; otherwise processed.
+    ///
+    /// # Returns
+    ///
+    /// A Pandas `DataFrame`.
+    ///
     #[pyo3(signature = (raw=false))]
     pub fn to_pandas(&self, py: Python<'_>, raw: Option<bool>) -> PyResult<Py<PyAny>> {
         // to_pandas method doesn't exist in rust, we need first convert to Python polars object,
@@ -225,18 +308,42 @@ impl PyProject {
             .map(|b| b.unbind())
     }
 
+    ///
+    /// Write processed samples to a YAML file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination file path.
+    ///
     pub fn write_yaml(&mut self, path: PathBuf) -> PyResult<()> {
         self.inner
             .write_yaml(path)
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
+    ///
+    /// Write processed samples to a JSON file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination file path.
+    ///
     pub fn write_json(&mut self, path: PathBuf) -> PyResult<()> {
         self.inner
             .write_json(path)
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
+    ///
+    /// Write processed samples to a CSV file.
+    ///
+    /// Falls back to Pandas export if the Polars CSV writer fails (e.g. list columns).
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination file path.
+    /// * `py` - The Python GIL token.
+    ///
     pub fn write_csv(&mut self, path: PathBuf, py: Python<'_>) -> PyResult<()> {
         match self.inner.write_csv(path.clone()) {
             Ok(()) => Ok(()),
@@ -253,6 +360,14 @@ impl PyProject {
         }
     }
 
+    ///
+    /// Write the raw project (config, samples, subsamples) to disk.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination path (folder or zip file).
+    /// * `zipped` - If `true`, write as a zip archive; otherwise as a folder.
+    ///
     #[pyo3(signature = (path, zipped=false))]
     pub fn write_raw(&mut self, path: PathBuf, zipped: bool) -> PyResult<()> {
         self.inner
@@ -260,18 +375,33 @@ impl PyProject {
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
+    ///
+    /// Print processed samples as YAML to stdout.
+    ///
     pub fn print_yaml(&self) -> PyResult<()> {
         self.inner
             .print_yaml()
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
+    ///
+    /// Print processed samples as JSON to stdout.
+    ///
     pub fn print_json(&self) -> PyResult<()> {
         self.inner
             .print_json()
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
+    ///
+    /// Print processed samples as CSV to stdout.
+    ///
+    /// Falls back to Pandas export if the Polars CSV writer fails.
+    ///
+    /// # Arguments
+    ///
+    /// * `py` - The Python GIL token.
+    ///
     pub fn print_csv(&self, py: Python<'_>) -> PyResult<()> {
         match self.inner.print_csv() {
             Ok(()) => Ok(()),
@@ -290,31 +420,61 @@ impl PyProject {
         }
     }
 
+    ///
+    /// Get the PEP version string.
+    ///
     #[getter]
     pub fn get_pep_version(&self) -> PyResult<&str> {
         Ok(self.inner.get_pep_version())
     }
 
+    ///
+    /// Get the project description, or `None` if not set.
+    ///
     #[getter]
     pub fn get_description(&self) -> PyResult<Option<String>> {
         Ok(self.inner.get_description())
     }
 
+    ///
+    /// Get the project name, or `None` if not set.
+    ///
     #[getter]
     pub fn get_name(&self) -> PyResult<Option<String>> {
         Ok(self.inner.get_name())
     }
 
+    ///
+    /// Set the project description.
+    ///
+    /// # Arguments
+    ///
+    /// * `description` - The new description, or `None` to clear it.
+    ///
     #[setter]
     pub fn set_description(&mut self, description: Option<String>) {
         self.inner.set_description(description);
     }
 
+    ///
+    /// Set the project name.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The new name, or `None` to clear it.
+    ///
     #[setter]
     pub fn set_name(&mut self, name: Option<String>) {
         self.inner.set_name(name);
     }
 
+    ///
+    /// Get the raw project config as a Python dict.
+    ///
+    /// # Returns
+    ///
+    /// A Python dict of the raw config, or `None` if no config exists.
+    ///
     #[getter]
     pub fn get_config(&self) -> PyResult<Py<PyAny>> {
         Python::with_gil(|py| match &self.inner.config {
@@ -328,6 +488,13 @@ impl PyProject {
         })
     }
 
+    ///
+    /// Get a [`PySamplesIter`] over the project's processed samples.
+    ///
+    /// # Returns
+    ///
+    /// An iterator yielding each sample as a Python dict.
+    ///
     #[getter]
     fn samples(slf: Py<Self>, py: Python<'_>) -> PyResult<Py<PySamplesIter>> {
         Py::new(
@@ -339,6 +506,17 @@ impl PyProject {
         )
     }
 
+    ///
+    /// Look up a single sample by name.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The sample name to look up.
+    ///
+    /// # Returns
+    ///
+    /// A Python dict of column-name to value pairs for the matching sample.
+    ///
     pub fn get_sample(&self, py: Python<'_>, name: &str) -> PyResult<HashMap<String, PyObject>> {
         match self.inner.get_sample(name) {
             Ok(sample) => match sample {
@@ -358,6 +536,9 @@ impl PyProject {
         }
     }
 
+    ///
+    /// Returns a string representation of the project's samples DataFrame.
+    ///
     fn __repr__(&self) -> String {
         format!("{}", self.inner.samples)
     }

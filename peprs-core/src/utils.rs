@@ -5,8 +5,21 @@ use regex::Regex;
 
 static RE_BRACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\{([^}]+)\}").unwrap());
 
+///
 /// Parses a template string and builds a polars `concat_str` expression.
-/// e.g., "/path/{sample_name}.bam" -> concat_str([lit("/path/"), col("sample_name"), lit(".bam")])
+/// e.g., `"/path/{sample_name}.bam"` becomes
+/// `concat_str([lit("/path/"), col("sample_name"), lit(".bam")])`.
+///
+/// Environment variables (e.g. `${HOME}`) are expanded before parsing.
+///
+/// # Arguments
+///
+/// * `template` - The template string with `{column}` placeholders.
+///
+/// # Returns
+///
+/// A polars `Expr` that concatenates literal and column references.
+///
 pub fn build_derive_template_expr(template: &str) -> Result<Expr, PolarsError> {
     // expand environment variables like `${HOME}` first.
     let expanded_template = shellexpand::full(template)
