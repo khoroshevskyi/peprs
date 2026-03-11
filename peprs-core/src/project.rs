@@ -953,11 +953,14 @@ impl Project {
 
                         let mut condition: Option<Expr> = None;
                         for (attr_name, imply_condition) in &rule.if_condition {
+                            let col_as_str = col(attr_name).cast(DataType::String);
                             let attr_cond = match imply_condition {
-                                ImplyCondition::Single(val) => col(attr_name).eq(lit(val.clone())),
+                                ImplyCondition::Single(val) => {
+                                    col_as_str.eq(lit(val.clone()))
+                                }
                                 ImplyCondition::Multiple(vals) => {
                                     vals.iter().fold(lit(false), |acc, v| {
-                                        acc.or(col(attr_name).eq(lit(v.clone())))
+                                        acc.or(col_as_str.clone().eq(lit(v.clone())))
                                     })
                                 }
                             };
@@ -1137,7 +1140,7 @@ impl Project {
             let mut final_expr = col(col_to_derive);
             for (key, template) in &derive_rule.sources {
                 let template_expr = build_derive_template_expr(template)?;
-                final_expr = when(col(col_to_derive).eq(lit(key.clone())))
+                final_expr = when(col(col_to_derive).cast(DataType::String).eq(lit(key.clone())))
                     .then(template_expr)
                     .otherwise(final_expr);
             }
@@ -1345,6 +1348,7 @@ mod tests {
     #[case("../example-peps/example_derive/project_config.yaml")]
     #[case("../example-peps/example_imports/project_config.yaml")]
     #[case("../example-peps/example_amendments1/project_config.yaml")]
+    #[case("../example-peps/example_derive_imply/project_config.yaml")]
     fn instantiate_pep(#[case] cfg_path: &'static str) {
         let proj = Project::from_config(cfg_path).build();
         let proj = proj.unwrap();
