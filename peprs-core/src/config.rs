@@ -17,7 +17,7 @@ pub struct ProjectConfig {
     pub sample_table: Option<String>,
     pub subsample_table: Option<SubsampleTable>,
     pub sample_table_index: Option<String>,
-    pub subsample_table_index: Option<String>,
+    pub subsample_table_index: Option<Vec<String>>,
     pub sample_modifiers: Option<SampleModifiers>,
     pub project_modifiers: Option<ProjectModifiers>,
     pub raw: Option<Value>,
@@ -132,8 +132,8 @@ impl ProjectConfig {
         }
         if let Some(val) = amendment.subsample_table_index {
             self.subsample_table_index = Some(match val {
-                SubsampleTableIndex::Single(s) => s,
-                SubsampleTableIndex::Multiple(v) => v.into_iter().next().unwrap_or_default(),
+                SubsampleTableIndex::Single(s) => vec![s],
+                SubsampleTableIndex::Multiple(v) => v,
             });
         }
         if let Some(val) = amendment.sample_modifiers {

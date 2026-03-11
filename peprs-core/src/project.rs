@@ -47,6 +47,7 @@ enum ProjectSource {
     InMemory {
         config: ProjectConfig,
         samples: DataFrame,
+        //TODO: add subsamples here! And change python from_dict initialization to use this builder.
     },
 }
 
@@ -57,6 +58,7 @@ pub struct ProjectBuilder {
     source: ProjectSource,
     amendments: Option<Vec<String>>,
     sample_table_index: Option<String>,
+    subsample_table_index: Option<Vec<String>>,
 }
 
 ///
@@ -68,6 +70,7 @@ pub struct Project {
     pub samples_raw: DataFrame,
     pub subsamples: Option<Vec<DataFrame>>,
     pub sample_table_index: String,
+    pub subsample_table_index: Option<Vec<String>>,
 }
 
 impl ProjectBuilder {
@@ -100,6 +103,23 @@ impl ProjectBuilder {
     ///
     pub fn with_sample_table_index(mut self, index: String) -> Self {
         self.sample_table_index = Some(index);
+        self
+    }
+
+
+    ///
+    /// Specify a custom subsample table index column name.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - Column name to use as the sample table index.
+    ///
+    /// # Returns
+    ///
+    /// The builder with the custom index set.
+    ///
+    pub fn with_subsample_table_index(mut self, index: &[String]) -> Self {
+        self.subsample_table_index = Some(index.to_vec());
         self
     }
 
@@ -145,17 +165,20 @@ impl ProjectBuilder {
                     samples_raw: df,
                     subsamples: None,
                     sample_table_index: index,
+                    subsample_table_index: None,
                 })
             }
             ProjectSource::InMemory {
                 mut config,
                 samples,
+                // TODO: add here subsamples
             } => {
                 // honor the sample_table_index from the builder, if provided
                 if let Some(idx) = self.sample_table_index {
                     config.sample_table_index = Some(idx);
                 }
                 // call the shared logic
+                // TODO: add here subsamples
                 Project::finalize_project_creation(config, samples, None)
             }
         }
@@ -186,6 +209,7 @@ impl Project {
             source: ProjectSource::DataFrame(df),
             amendments: None,
             sample_table_index: None,
+            subsample_table_index: None,
         })
     }
 
@@ -206,6 +230,7 @@ impl Project {
             source: ProjectSource::Path(path.as_ref().to_path_buf()),
             amendments: None,
             sample_table_index: None,
+            subsample_table_index: None,
         }
     }
 
@@ -225,6 +250,7 @@ impl Project {
             source: ProjectSource::DataFrame(df),
             amendments: None,
             sample_table_index: None,
+            subsample_table_index: None,
         }
     }
 
@@ -245,6 +271,7 @@ impl Project {
             source: ProjectSource::InMemory { config, samples },
             amendments: None,
             sample_table_index: None,
+            subsample_table_index: None,
         }
     }
 
@@ -869,6 +896,11 @@ impl Project {
             .as_deref()
             .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX);
 
+        let subsample_indexes: Option<Vec<String>> = match subsamples {
+            Some(_) => Some(config.subsample_table_index.clone().unwrap_or(vec![DEFAULT_SUBSAMPLE_TABLE_INDEX.to_string()])),
+            _ => None,
+        };
+
         let mut samples_lf = Some(samples_df_raw.clone().lazy());
 
         // check if sample table has duplicated sample names
@@ -994,6 +1026,7 @@ impl Project {
             samples: samples.unwrap_or(DataFrame::empty()),
             samples_raw: samples_df_raw,
             subsamples,
+            subsample_table_index: subsample_indexes
         })
     }
 
@@ -1010,7 +1043,7 @@ impl Project {
     ///
     /// * `samples_lf` - The samples LazyFrame to merge into.
     /// * `subsamples` - Subsample DataFrames to merge.
-    /// * `sample_table_index` - Column name used as the join key.
+    /// * `sample_table_index` - Column name used as the join key. (is it correct? Should it be subsample_table_index)
     ///
     /// # Returns
     ///
