@@ -61,3 +61,10 @@ pub fn build_derive_template_expr(template: &str) -> Result<Expr, PolarsError> {
         Ok(concat_str(parts, "", true))
     }
 }
+
+pub fn extract_template_columns(template: &str) -> Vec<String> {
+    RE_BRACE
+        .captures_iter(template)
+        .map(|cap| cap.get(1).unwrap().as_str().to_string())
+        .collect()
+}

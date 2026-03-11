@@ -13,7 +13,7 @@ use crate::config::{ImplyCondition, ProjectConfig, SubsampleTable};
 use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX, DEFAULT_SUBSAMPLE_TABLE_INDEX};
 use crate::error::Error;
 use crate::sample::{Sample, SamplesIter};
-use crate::utils::build_derive_template_expr;
+use crate::utils::{build_derive_template_expr, extract_template_columns};
 #[cfg(feature = "wdl")]
 use crate::wdl::WdlInputParsingOptions;
 #[cfg(feature = "wdl")]
@@ -107,7 +107,6 @@ impl ProjectBuilder {
         self.sample_table_index = Some(index);
         self
     }
-
 
     ///
     /// Specify a custom subsample table index column name.
@@ -899,7 +898,12 @@ impl Project {
             .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX);
 
         let subsample_indexes: Option<Vec<String>> = match subsamples {
-            Some(_) => Some(config.subsample_table_index.clone().unwrap_or(vec![DEFAULT_SUBSAMPLE_TABLE_INDEX.to_string()])),
+            Some(_) => Some(
+                config
+                    .subsample_table_index
+                    .clone()
+                    .unwrap_or(vec![DEFAULT_SUBSAMPLE_TABLE_INDEX.to_string()]),
+            ),
             _ => None,
         };
 
@@ -983,26 +987,6 @@ impl Project {
                     }
                 }
 
-                // DERIVE
-                if let Some(derive_rule) = &modifiers.derive {
-                    for col_to_derive in &derive_rule.attributes {
-                        // start with the original column as the final "else" case
-                        let mut final_expr = col(col_to_derive);
-
-                        // chain a when-then for each source template
-                        for (key, template) in &derive_rule.sources {
-                            let template_expr = build_derive_template_expr(template)?;
-
-                            final_expr = when(col(col_to_derive).eq(lit(key.clone())))
-                                .then(template_expr)
-                                .otherwise(final_expr);
-                        }
-
-                        // apply the chained expression to the DataFrame
-                        new_lf = new_lf.with_column(final_expr.alias(col_to_derive));
-                    }
-                }
-
                 // after all potential modifications, re-assign
                 samples_lf = Some(new_lf)
             }
@@ -1013,6 +997,16 @@ impl Project {
         if let Some(ref sub_dfs) = subsamples {
             if let Some(lf) = samples_lf.take() {
                 samples_lf = Some(Self::merge_subsamples(lf, sub_dfs, sample_table_index)?);
+            }
+        }
+
+        // DERIVE — runs after subsample merge so all columns (including list-typed
+        // ones from subsamples) are available. Handles both scalar and list cases.
+        if let Some(modifiers) = &config.sample_modifiers {
+            if let Some(derive_rule) = &modifiers.derive {
+                if let Some(lf) = samples_lf.take() {
+                    samples_lf = Some(Self::apply_derive(lf, derive_rule)?);
+                }
             }
         }
 
@@ -1028,7 +1022,7 @@ impl Project {
             samples: samples.unwrap_or(DataFrame::empty()),
             samples_raw: samples_df_raw,
             subsamples,
-            subsample_table_index: subsample_indexes
+            subsample_table_index: subsample_indexes,
         })
     }
 
@@ -1111,6 +1105,83 @@ impl Project {
         }
 
         Ok(result_lf)
+    }
+
+    /// Apply derive modifier on a LazyFrame, handling both scalar and List columns.
+    ///
+    /// For scalar columns, applies the when-then derive chain directly.
+    /// For List columns (from subsample merge), explodes to scalar rows first,
+    /// applies the derive chain, then implodes back.
+    fn apply_derive(
+        lf: LazyFrame,
+        derive_rule: &crate::config::DeriveRule,
+    ) -> Result<LazyFrame, Error> {
+        let mut result = lf;
+
+        for col_to_derive in &derive_rule.attributes {
+            let mut involved_cols: Vec<String> = vec![col_to_derive.clone()];
+            for template in derive_rule.sources.values() {
+                involved_cols.extend(extract_template_columns(template));
+            }
+            involved_cols.sort();
+            involved_cols.dedup();
+
+            let schema = result.collect_schema()?;
+            let list_cols: Vec<String> = involved_cols
+                .iter()
+                .filter(|c| matches!(schema.get(c.as_str()), Some(DataType::List(_))))
+                .cloned()
+                .collect();
+
+            // build the when-then derive chain
+            let mut final_expr = col(col_to_derive);
+            for (key, template) in &derive_rule.sources {
+                let template_expr = build_derive_template_expr(template)?;
+                final_expr = when(col(col_to_derive).eq(lit(key.clone())))
+                    .then(template_expr)
+                    .otherwise(final_expr);
+            }
+
+            if list_cols.is_empty() {
+                // scalar path — apply directly
+                result = result.with_column(final_expr.alias(col_to_derive));
+            } else {
+                // list path — explode, derive, implode back
+                let row_idx = "__derive_row_idx";
+                let mut work = result.with_row_index(row_idx, None);
+
+                let explode_names: Vec<&str> = list_cols.iter().map(|c| c.as_str()).collect();
+                work = work.explode(cols(explode_names));
+                work = work.with_column(final_expr.alias(col_to_derive));
+
+                // re-aggregate: implode exploded + derived cols, first() for the rest
+                let agg_schema = work.collect_schema()?;
+                let mut cols_to_implode = list_cols;
+                if !cols_to_implode.contains(&col_to_derive.to_string()) {
+                    cols_to_implode.push(col_to_derive.clone());
+                }
+
+                let agg_exprs: Vec<Expr> = agg_schema
+                    .iter_names()
+                    .filter(|n| n.as_str() != row_idx)
+                    .map(|n| {
+                        if cols_to_implode.iter().any(|c| c.as_str() == n.as_str()) {
+                            col(n.clone())
+                        } else {
+                            col(n.clone()).first()
+                        }
+                    })
+                    .collect();
+
+                result = work
+                    .group_by([col(row_idx)])
+                    .agg(agg_exprs)
+                    .sort([row_idx], SortMultipleOptions::default())
+                    .drop(cols([row_idx]));
+            }
+        }
+
+        Ok(result)
     }
 
     ///
@@ -1518,7 +1589,7 @@ mod tests {
 
     #[rstest]
     #[case("../example-peps/example_subtable1/project_config.yaml")]
-    // case subtable2 skipped: derive references column only in subsample table (needs subsample-aware derive)
+    #[case("../example-peps/example_subtable2/project_config.yaml")]
     #[case("../example-peps/example_subtable3/project_config.yaml")]
     #[case("../example-peps/example_subtable4/project_config.yaml")]
     #[case("../example-peps/example_subtable5/project_config.yaml")]
@@ -1577,5 +1648,92 @@ mod tests {
         // frog_1 has 3 subsamples for read1/read2
         let frog1_read1 = read1_col.list().unwrap().get_as_series(0).unwrap();
         assert_eq!(frog1_read1.len(), 3);
+    }
+
+    #[rstest]
+    fn subtable2_derive_with_subsamples() {
+        let proj = Project::from_config("../example-peps/example_subtable2/project_config.yaml")
+            .build()
+            .unwrap();
+
+        let file_col = proj.samples.column("file").unwrap();
+        assert!(
+            matches!(file_col.dtype(), DataType::List(_)),
+            "Expected List type for 'file', got {:?}",
+            file_col.dtype()
+        );
+
+        // sorted: frog_1(0), frog_2(1), frog_3(2), frog_4(3)
+        // frog_1: local_files with file_id=[a,b,c] → 3 derived paths
+        let frog1 = file_col.list().unwrap().get_as_series(0).unwrap();
+        assert_eq!(frog1.len(), 3);
+        let frog1_vals: Vec<String> = frog1
+            .str()
+            .unwrap()
+            .into_no_null_iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(
+            frog1_vals,
+            vec![
+                "../data/frog1a_data.txt",
+                "../data/frog1b_data.txt",
+                "../data/frog1c_data.txt",
+            ]
+        );
+
+        // frog_2: local_files with file_id=[a,b] → 2 derived paths
+        let frog2 = file_col.list().unwrap().get_as_series(1).unwrap();
+        assert_eq!(frog2.len(), 2);
+
+        // frog_3: local_files_unmerged (no file_id) → 1 derived path
+        let frog3 = file_col.list().unwrap().get_as_series(2).unwrap();
+        assert_eq!(frog3.len(), 1);
+        let frog3_val = frog3.str().unwrap().get(0).unwrap();
+        assert_eq!(frog3_val, "../data/frog3_data.txt");
+
+        // frog_4: local_files_unmerged → 1 derived path
+        let frog4 = file_col.list().unwrap().get_as_series(3).unwrap();
+        assert_eq!(frog4.len(), 1);
+        let frog4_val = frog4.str().unwrap().get(0).unwrap();
+        assert_eq!(frog4_val, "../data/frog4_data.txt");
+    }
+
+    #[rstest]
+    fn subtable3_derive_with_subsamples() {
+        let proj = Project::from_config("../example-peps/example_subtable3/project_config.yaml")
+            .build()
+            .unwrap();
+
+        let file_col = proj.samples.column("file").unwrap();
+        assert!(
+            matches!(file_col.dtype(), DataType::List(_)),
+            "Expected List type for 'file', got {:?}",
+            file_col.dtype()
+        );
+
+        // frog_1: local_files with file_id=[a,b,c] → 3 derived paths
+        let frog1 = file_col.list().unwrap().get_as_series(0).unwrap();
+        assert_eq!(frog1.len(), 3);
+        let frog1_vals: Vec<String> = frog1
+            .str()
+            .unwrap()
+            .into_no_null_iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(
+            frog1_vals,
+            vec![
+                "../data/frog1a_data.txt",
+                "../data/frog1b_data.txt",
+                "../data/frog1c_data.txt",
+            ]
+        );
+
+        // frog_2-4: local_files_unmerged → uses {identifier}*_data.txt
+        let frog2 = file_col.list().unwrap().get_as_series(1).unwrap();
+        assert_eq!(frog2.len(), 1);
+        let frog2_val = frog2.str().unwrap().get(0).unwrap();
+        assert_eq!(frog2_val, "../data/frog2*_data.txt");
     }
 }
