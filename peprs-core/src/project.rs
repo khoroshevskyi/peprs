@@ -7,6 +7,8 @@ use serde_json;
 use serde_yaml;
 use serde_yaml::Value as YValue;
 
+use tracing::{info, warn};
+
 use crate::config::{ImplyCondition, ProjectConfig, SubsampleTable};
 use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX, DEFAULT_SUBSAMPLE_TABLE_INDEX};
 use crate::error::Error;
@@ -460,9 +462,9 @@ impl Project {
     pub fn write_json<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         let file = File::create(path.as_ref())?;
 
-        println!("Converting project to json file");
+        info!("Converting project to JSON file");
         if self.samples.height() > 100000 {
-            println!(
+            warn!(
                 "Project has more than 100K samples; conversion may take a while. Please be patient."
             );
         }
@@ -471,9 +473,9 @@ impl Project {
             .with_json_format(JsonFormat::Json)
             .finish(&mut self.samples)?;
 
-        println!(
-            "Processed project converted to json successfully and saved at {}",
-            path.as_ref().display()
+        info!(
+            path = %path.as_ref().display(),
+            "Project converted to JSON successfully"
         );
         Ok(())
     }
@@ -486,9 +488,9 @@ impl Project {
     /// * `path` - Destination file path.
     ///
     pub fn write_yaml<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
-        println!("Converting project to yaml file");
+        info!("Converting project to YAML file");
         if self.samples.height() > 100000 {
-            println!(
+            warn!(
                 "Project has more than 100K samples; conversion may take a while. Please be patient."
             );
         }
@@ -503,9 +505,9 @@ impl Project {
         let file = File::create(path.as_ref())?;
         serde_yaml::to_writer(file, &value)?;
 
-        println!(
-            "Processed project converted to yaml successfully and saved at {}",
-            path.as_ref().display()
+        info!(
+            path = %path.as_ref().display(),
+            "Project converted to YAML successfully"
         );
         Ok(())
     }
@@ -525,9 +527,9 @@ impl Project {
             .with_separator(b',')
             .finish(&mut self.samples)?;
 
-        println!(
-            "Processed project successfully written to {:?}",
-            path.as_ref().display()
+        info!(
+            path = %path.as_ref().display(),
+            "Project written to CSV successfully"
         );
         Ok(())
     }
@@ -907,8 +909,8 @@ impl Project {
         let sample_col = samples_df_raw.column(sample_table_index)?;
         let has_duplicates = sample_col.n_unique()? < sample_col.len();
         if has_duplicates {
-            println!(
-                "WARNING: Sample table contains duplicated samples, bugs can appear. \
+            warn!(
+                "Sample table contains duplicated samples, bugs can appear. \
                       We strongly encourage using subsample tables!"
             );
         }
