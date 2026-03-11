@@ -378,18 +378,18 @@ impl PyProject {
     ///
     /// Print processed samples as YAML to stdout.
     ///
-    pub fn print_yaml(&self) -> PyResult<()> {
+    pub fn to_yaml_string(&self) -> PyResult<String> {
         self.inner
-            .print_yaml()
+            .to_yaml_string()
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
     ///
     /// Print processed samples as JSON to stdout.
     ///
-    pub fn print_json(&self) -> PyResult<()> {
+    pub fn to_json_string(&self) -> PyResult<String> {
         self.inner
-            .print_json()
+            .to_json_string()
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))
     }
 
@@ -402,9 +402,9 @@ impl PyProject {
     ///
     /// * `py` - The Python GIL token.
     ///
-    pub fn print_csv(&self, py: Python<'_>) -> PyResult<()> {
-        match self.inner.print_csv() {
-            Ok(()) => Ok(()),
+    pub fn to_csv_string(&self, py: Python<'_>) -> PyResult<String> {
+        match self.inner.to_csv_string() {
+            Ok(csv) => Ok(csv),
             Err(_) => {
                 let kwargs = PyDict::new(py);
                 kwargs.set_item("index", false)?;
@@ -414,8 +414,7 @@ impl PyProject {
                     .call_method0("to_pandas")?
                     .call_method("to_csv", (py.None(),), Some(&kwargs))?
                     .extract::<String>()?;
-                println!("{}", csv_string);
-                Ok(())
+                Ok(csv_string)
             }
         }
     }
@@ -479,7 +478,7 @@ impl PyProject {
     pub fn get_config(&self) -> PyResult<Py<PyAny>> {
         Python::with_gil(|py| match &self.inner.config {
             Some(config) => {
-                let value = config.raw.clone().unwrap_or_default();
+                let value = config.get_raw_config(None, None);
                 let obj =
                     pythonize(py, &value).map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
                 Ok(obj.into())
@@ -541,5 +540,19 @@ impl PyProject {
     ///
     fn __repr__(&self) -> String {
         format!("{}", self.inner.samples)
+    }
+
+    ///
+    /// Return a number of samples of the PEP
+    ///
+    fn __len__(&self) -> PyResult<usize> {
+        Ok(self.inner.len())
+    }
+
+    ///
+    /// Return a number of samples of the PEP
+    ///
+    fn len(&self) -> PyResult<usize> {
+        Ok(self.inner.len())
     }
 }

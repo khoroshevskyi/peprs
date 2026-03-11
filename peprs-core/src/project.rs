@@ -676,34 +676,35 @@ impl Project {
     }
 
     ///
-    /// Print processed samples as JSON to stdout (max 1K samples).
+    /// Print processed samples as JSON to stdout.
     ///
-    pub fn print_json(&self) -> Result<(), Error> {
-        if self.samples.height() > 1000 {
-            println!("Project has more than 1K samples; unable to print. Use `save_json` instead.");
-            return Ok(());
-        }
-
+    /// # Returns
+    ///
+    /// Processed Project as String in JSON format
+    ///
+    pub fn to_json_string(&self) -> Result<String, Error> {
+        // if self.samples.height() > 1000 {
+        //     println!("Project has more than 1K samples; unable to print. Use `save_json` instead.");
+        //     return Ok(());
+        // }
         let mut json_buf = Vec::new();
         let mut df = self.samples.clone();
         JsonWriter::new(&mut json_buf)
             .with_json_format(JsonFormat::Json)
             .finish(&mut df)?;
 
-        let output = String::from_utf8_lossy(&json_buf);
-        println!("{}", output);
-        Ok(())
+        let output = String::from_utf8_lossy(&json_buf).to_string();
+        Ok(output)
     }
 
     ///
-    /// Print processed samples as YAML to stdout (max 1K samples).
+    /// Print processed samples as YAML to stdout.
     ///
-    pub fn print_yaml(&self) -> Result<(), Error> {
-        if self.samples.height() > 1000 {
-            println!("Project has more than 1K samples; unable to print. Use `save_yaml` instead.");
-            return Ok(());
-        }
-
+    /// # Returns
+    ///
+    /// Processed Project as String in YAML format
+    ///
+    pub fn to_yaml_string(&self) -> Result<String, Error> {
         let mut json_buf = Vec::new();
         let mut df = self.samples.clone();
         JsonWriter::new(&mut json_buf)
@@ -712,19 +713,18 @@ impl Project {
 
         let value: serde_json::Value = serde_json::from_slice(&json_buf)?;
         let yaml_str = serde_yaml::to_string(&value)?;
-        println!("{}", yaml_str);
-        Ok(())
+        // println!("{}", yaml_str);
+        Ok(yaml_str)
     }
 
     ///
-    /// Print processed samples as CSV to stdout (max 1K samples).
+    /// Print processed samples as CSV to stdout.
     ///
-    pub fn print_csv(&self) -> Result<(), Error> {
-        if self.samples.height() > 1000 {
-            println!("Project has more than 1K samples; unable to print. Use `save_csv` instead.");
-            return Ok(());
-        }
-
+    /// # Returns
+    ///
+    /// Processed Project as String in csv format
+    ///
+    pub fn to_csv_string(&self) -> Result<String, Error> {
         let mut csv_buf = Vec::new();
         let mut df = self.samples.clone();
         CsvWriter::new(&mut csv_buf)
@@ -733,8 +733,8 @@ impl Project {
             .finish(&mut df)?;
 
         let output = String::from_utf8_lossy(&csv_buf);
-        println!("{}", output);
-        Ok(())
+        // println!("{}", output);
+        Ok(output.to_string())
     }
 
     ///
