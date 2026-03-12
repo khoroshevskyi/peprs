@@ -45,11 +45,12 @@ fn any_value_to_json(any_value: AnyValue) -> Value {
 #[allow(clippy::large_enum_variant)]
 enum ProjectSource {
     Path(PathBuf),
+    CSV(PathBuf),
     DataFrame(DataFrame),
     InMemory {
         config: ProjectConfig,
         samples: DataFrame,
-        //TODO: add subsamples here! And change python from_dict initialization to use this builder.
+        subsamples: Option<Vec<DataFrame>>,
     },
 }
 
@@ -152,6 +153,26 @@ impl ProjectBuilder {
 
                 Project::new_from_parsed_config(final_config, config_dir)
             }
+            ProjectSource::CSV(csv) => {
+                let final_index = self
+                    .sample_table_index
+                    .unwrap_or_else(|| DEFAULT_SAMPLE_TABLE_INDEX.to_string());
+
+                let df = LazyCsvReader::new(PlPath::new(csv.to_str().unwrap()))
+                    .with_has_header(true)
+                    .with_infer_schema_length(Some(10_000))
+                    .finish()?
+                    .with_column(col(final_index.clone()).cast(DataType::String))
+                    .collect()?;
+
+                Self {
+                    source: ProjectSource::DataFrame(df),
+                    amendments: None,
+                    sample_table_index: Some(final_index),
+                    subsample_table_index: self.subsample_table_index,
+                }
+                .build()
+            }
             ProjectSource::DataFrame(df) => {
                 let index = self
                     .sample_table_index
@@ -172,15 +193,14 @@ impl ProjectBuilder {
             ProjectSource::InMemory {
                 mut config,
                 samples,
-                // TODO: add here subsamples
+                subsamples,
             } => {
                 // honor the sample_table_index from the builder, if provided
                 if let Some(idx) = self.sample_table_index {
                     config.sample_table_index = Some(idx);
                 }
                 // call the shared logic
-                // TODO: add here subsamples
-                Project::finalize_project_creation(config, samples, None)
+                Project::finalize_project_creation(config, samples, subsamples)
             }
         }
     }
@@ -199,15 +219,8 @@ impl Project {
     /// A [`ProjectBuilder`] preloaded with the CSV data.
     ///
     pub fn from_csv<P: AsRef<Path>>(path: P) -> Result<ProjectBuilder, Error> {
-        let df = LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
-            .with_has_header(true)
-            .with_infer_schema_length(Some(10_000))
-            .finish()?
-            .with_column(col(DEFAULT_SAMPLE_TABLE_INDEX).cast(DataType::String))
-            .collect()?;
-
         Ok(ProjectBuilder {
-            source: ProjectSource::DataFrame(df),
+            source: ProjectSource::CSV(path.as_ref().to_path_buf()),
             amendments: None,
             sample_table_index: None,
             subsample_table_index: None,
@@ -267,9 +280,17 @@ impl Project {
     ///
     /// A [`ProjectBuilder`] wrapping the given config and samples.
     ///
-    pub fn from_memory(config: ProjectConfig, samples: DataFrame) -> ProjectBuilder {
+    pub fn from_memory(
+        config: ProjectConfig,
+        samples: DataFrame,
+        subsamples: Option<Vec<DataFrame>>,
+    ) -> ProjectBuilder {
         ProjectBuilder {
-            source: ProjectSource::InMemory { config, samples },
+            source: ProjectSource::InMemory {
+                config,
+                samples,
+                subsamples,
+            },
             amendments: None,
             sample_table_index: None,
             subsample_table_index: None,
@@ -887,7 +908,7 @@ impl Project {
     ///
     /// A fully constructed `Project`, or an error.
     ///
-    pub fn finalize_project_creation(
+    fn finalize_project_creation(
         config: ProjectConfig,
         samples_df_raw: DataFrame,
         subsamples: Option<Vec<DataFrame>>,
@@ -955,9 +976,7 @@ impl Project {
                         for (attr_name, imply_condition) in &rule.if_condition {
                             let col_as_str = col(attr_name).cast(DataType::String);
                             let attr_cond = match imply_condition {
-                                ImplyCondition::Single(val) => {
-                                    col_as_str.eq(lit(val.clone()))
-                                }
+                                ImplyCondition::Single(val) => col_as_str.eq(lit(val.clone())),
                                 ImplyCondition::Multiple(vals) => {
                                     vals.iter().fold(lit(false), |acc, v| {
                                         acc.or(col_as_str.clone().eq(lit(v.clone())))
@@ -1140,9 +1159,13 @@ impl Project {
             let mut final_expr = col(col_to_derive);
             for (key, template) in &derive_rule.sources {
                 let template_expr = build_derive_template_expr(template)?;
-                final_expr = when(col(col_to_derive).cast(DataType::String).eq(lit(key.clone())))
-                    .then(template_expr)
-                    .otherwise(final_expr);
+                final_expr = when(
+                    col(col_to_derive)
+                        .cast(DataType::String)
+                        .eq(lit(key.clone())),
+                )
+                .then(template_expr)
+                .otherwise(final_expr);
             }
 
             if list_cols.is_empty() {

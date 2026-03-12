@@ -42,21 +42,37 @@ impl PyProject {
     /// A new `PyProject`, or an error if the file format is unsupported.
     ///
     #[new]
-    pub fn py_new(path: String) -> Result<Self, PeprsCoreError> {
-        // if yaml file, assume config
-        if path.ends_with(".yaml") || path.ends_with(".yml") {
-            let inner = Project::from_config(&path).build()?;
-            Ok(PyProject { inner })
+    #[pyo3(signature = (path, amendments=None, sample_table_index=None, subsample_table_index=None))]
+    pub fn py_new(
+        path: String,
+        amendments: Option<Vec<String>>,
+        sample_table_index: Option<String>,
+        subsample_table_index: Option<Vec<String>>,
+    ) -> Result<Self, PeprsCoreError> {
+        let mut builder = if path.ends_with(".yaml") || path.ends_with(".yml") {
+            Project::from_config(&path)
         } else if path.ends_with(".csv") {
-            let inner = Project::from_csv(&path)?.build()?;
-            Ok(PyProject { inner })
+            Project::from_csv(&path)?
         } else {
-            Err(PeprsCoreError::from(
+            return Err(PeprsCoreError::from(
                 peprs_core::error::Error::InvalidFormat(
                     "Input file must be csv or yaml".to_string(),
                 ),
-            ))
+            ));
+        };
+
+        if let Some(ref amendments) = amendments {
+            builder = builder.with_amendments(amendments);
         }
+        if let Some(sample_table_index) = sample_table_index {
+            builder = builder.with_sample_table_index(sample_table_index);
+        }
+        if let Some(ref subsample_table_index) = subsample_table_index {
+            builder = builder.with_subsample_table_index(subsample_table_index);
+        }
+
+        let inner = builder.build()?;
+        Ok(PyProject { inner })
     }
 
     ///
@@ -138,7 +154,8 @@ impl PyProject {
         };
 
         // 4. Build
-        let inner = Project::finalize_project_creation(config, samples_df, subsamples)
+        let inner = Project::from_memory(config, samples_df, subsamples)
+            .build()
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(PyProject { inner })
     }
@@ -172,7 +189,7 @@ impl PyProject {
 
         match df {
             Ok(df) => {
-                let inner = Project::from_memory(cfg, df).build()?;
+                let inner = Project::from_memory(cfg, df, None).build()?;
                 Ok(PyProject { inner })
             }
             Err(err) => Err(PeprsCoreError::from(
