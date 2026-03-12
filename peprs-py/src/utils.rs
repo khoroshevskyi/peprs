@@ -2,6 +2,21 @@ use polars::prelude::*;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
 
+///
+/// Convert a Polars [`AnyValue`] into a Python object.
+///
+/// Handles all numeric types, booleans, strings, nulls, and lists.
+/// Unsupported types fall back to their string representation.
+///
+/// # Arguments
+///
+/// * `py` - The Python GIL token.
+/// * `value` - The Polars value to convert.
+///
+/// # Returns
+///
+/// A Python object representing the value.
+///
 pub fn anyvalue_to_pyobject(py: Python<'_>, value: &AnyValue) -> PyObject {
     match value {
         AnyValue::Null => py.None(),

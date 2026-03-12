@@ -7,11 +7,13 @@ use serde_json;
 use serde_yaml;
 use serde_yaml::Value as YValue;
 
+use tracing::{info, warn};
+
 use crate::config::{ImplyCondition, ProjectConfig, SubsampleTable};
 use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX, DEFAULT_SUBSAMPLE_TABLE_INDEX};
 use crate::error::Error;
 use crate::sample::{Sample, SamplesIter};
-use crate::utils::build_derive_template_expr;
+use crate::utils::{build_derive_template_expr, extract_template_columns};
 #[cfg(feature = "wdl")]
 use crate::wdl::WdlInputParsingOptions;
 #[cfg(feature = "wdl")]
@@ -43,30 +45,48 @@ fn any_value_to_json(any_value: AnyValue) -> Value {
 #[allow(clippy::large_enum_variant)]
 enum ProjectSource {
     Path(PathBuf),
+    CSV(PathBuf),
     DataFrame(DataFrame),
     InMemory {
         config: ProjectConfig,
         samples: DataFrame,
+        subsamples: Option<Vec<DataFrame>>,
     },
 }
 
+///
+/// Builder for configuring and constructing a [`Project`].
+///
 pub struct ProjectBuilder {
     source: ProjectSource,
     amendments: Option<Vec<String>>,
     sample_table_index: Option<String>,
+    subsample_table_index: Option<Vec<String>>,
 }
 
+///
+/// A loaded PEP project with processed samples and configuration.
+///
 pub struct Project {
     pub config: Option<ProjectConfig>,
     pub samples: DataFrame,
     pub samples_raw: DataFrame,
     pub subsamples: Option<Vec<DataFrame>>,
     pub sample_table_index: String,
+    pub subsample_table_index: Option<Vec<String>>,
 }
 
 impl ProjectBuilder {
     ///
     /// Specify a list of amendments to activate when building the project.
+    ///
+    /// # Arguments
+    ///
+    /// * `amendments` - Amendment names to activate.
+    ///
+    /// # Returns
+    ///
+    /// The builder with amendments set.
     ///
     pub fn with_amendments(mut self, amendments: &[String]) -> Self {
         self.amendments = Some(amendments.to_vec());
@@ -76,14 +96,43 @@ impl ProjectBuilder {
     ///
     /// Specify a custom sample table index column name.
     ///
+    /// # Arguments
+    ///
+    /// * `index` - Column name to use as the sample table index.
+    ///
+    /// # Returns
+    ///
+    /// The builder with the custom index set.
+    ///
     pub fn with_sample_table_index(mut self, index: String) -> Self {
         self.sample_table_index = Some(index);
         self
     }
 
-    /// Construct the `Project` using the specified configuration.
     ///
+    /// Specify a custom subsample table index column name.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - Column names to use as the subsample table index.
+    ///
+    /// # Returns
+    ///
+    /// The builder with the custom subsample index set.
+    ///
+    pub fn with_subsample_table_index(mut self, index: &[String]) -> Self {
+        self.subsample_table_index = Some(index.to_vec());
+        self
+    }
+
+    ///
+    /// Construct the [`Project`] using the specified configuration.
     /// This is the final step that will perform file I/O and parsing.
+    ///
+    /// # Returns
+    ///
+    /// The fully constructed `Project`, or an error if loading/parsing fails.
+    ///
     pub fn build(self) -> Result<Project, Error> {
         match self.source {
             ProjectSource::Path(path) => {
@@ -102,7 +151,32 @@ impl ProjectBuilder {
                 let mut final_config = config;
                 final_config.sample_table_index = Some(final_index);
 
+                // honor the subsample_table_index from the builder, if provided
+                if let Some(sub_idx) = self.subsample_table_index {
+                    final_config.subsample_table_index = Some(sub_idx);
+                }
+
                 Project::new_from_parsed_config(final_config, config_dir)
+            }
+            ProjectSource::CSV(csv) => {
+                let final_index = self
+                    .sample_table_index
+                    .unwrap_or_else(|| DEFAULT_SAMPLE_TABLE_INDEX.to_string());
+
+                let df = LazyCsvReader::new(PlPath::new(csv.to_str().unwrap()))
+                    .with_has_header(true)
+                    .with_infer_schema_length(Some(10_000))
+                    .finish()?
+                    .with_column(col(final_index.clone()).cast(DataType::String))
+                    .collect()?;
+
+                Self {
+                    source: ProjectSource::DataFrame(df),
+                    amendments: None,
+                    sample_table_index: Some(final_index),
+                    subsample_table_index: self.subsample_table_index,
+                }
+                .build()
             }
             ProjectSource::DataFrame(df) => {
                 let index = self
@@ -118,73 +192,126 @@ impl ProjectBuilder {
                     samples_raw: df,
                     subsamples: None,
                     sample_table_index: index,
+                    subsample_table_index: None,
                 })
             }
             ProjectSource::InMemory {
                 mut config,
                 samples,
+                subsamples,
             } => {
                 // honor the sample_table_index from the builder, if provided
                 if let Some(idx) = self.sample_table_index {
                     config.sample_table_index = Some(idx);
                 }
+                // honor the subsample_table_index from the builder, if provided
+                if let Some(sub_idx) = self.subsample_table_index {
+                    config.subsample_table_index = Some(sub_idx);
+                }
                 // call the shared logic
-                Project::finalize_project_creation(config, samples, None)
+                Project::finalize_project_creation(config, samples, subsamples)
             }
         }
     }
 }
 
 impl Project {
+    ///
     /// Create a project from a CSV file.
-    /// This will load the CSV into a DataFrame and return a builder.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the CSV file.
+    ///
+    /// # Returns
+    ///
+    /// A [`ProjectBuilder`] preloaded with the CSV data.
+    ///
     pub fn from_csv<P: AsRef<Path>>(path: P) -> Result<ProjectBuilder, Error> {
-        let df = LazyCsvReader::new(PlPath::new(path.as_ref().to_str().unwrap()))
-            .with_has_header(true)
-            .with_infer_schema_length(Some(10_000))
-            .finish()?
-            .with_column(col(DEFAULT_SAMPLE_TABLE_INDEX).cast(DataType::String))
-            .collect()?;
-
         Ok(ProjectBuilder {
-            source: ProjectSource::DataFrame(df),
+            source: ProjectSource::CSV(path.as_ref().to_path_buf()),
             amendments: None,
             sample_table_index: None,
+            subsample_table_index: None,
         })
     }
 
     ///
     /// Create a project from a YAML configuration file.
-    /// This returns a builder that will process the file upon `.build()`.
+    /// The file is read upon calling `.build()`.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the YAML config file.
+    ///
+    /// # Returns
+    ///
+    /// A [`ProjectBuilder`] targeting the given config path.
+    ///
     pub fn from_config<P: AsRef<Path>>(path: P) -> ProjectBuilder {
         ProjectBuilder {
             source: ProjectSource::Path(path.as_ref().to_path_buf()),
             amendments: None,
             sample_table_index: None,
+            subsample_table_index: None,
         }
     }
 
     ///
     /// Create a project from an in-memory Polars DataFrame.
+    ///
+    /// # Arguments
+    ///
+    /// * `df` - The DataFrame containing sample data.
+    ///
+    /// # Returns
+    ///
+    /// A [`ProjectBuilder`] wrapping the given DataFrame.
+    ///
     pub fn from_dataframe(df: DataFrame) -> ProjectBuilder {
         ProjectBuilder {
             source: ProjectSource::DataFrame(df),
             amendments: None,
             sample_table_index: None,
-        }
-    }
-
-    pub fn from_memory(config: ProjectConfig, samples: DataFrame) -> ProjectBuilder {
-        ProjectBuilder {
-            source: ProjectSource::InMemory { config, samples },
-            amendments: None,
-            sample_table_index: None,
+            subsample_table_index: None,
         }
     }
 
     ///
-    /// Get the pep version in the config if it exists
-    /// otherwise return the default version
+    /// Create a project from in-memory config and samples DataFrame.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The project configuration.
+    /// * `samples` - The samples DataFrame.
+    ///
+    /// # Returns
+    ///
+    /// A [`ProjectBuilder`] wrapping the given config and samples.
+    ///
+    pub fn from_memory(
+        config: ProjectConfig,
+        samples: DataFrame,
+        subsamples: Option<Vec<DataFrame>>,
+    ) -> ProjectBuilder {
+        ProjectBuilder {
+            source: ProjectSource::InMemory {
+                config,
+                samples,
+                subsamples,
+            },
+            amendments: None,
+            sample_table_index: None,
+            subsample_table_index: None,
+        }
+    }
+
+    ///
+    /// Get the PEP version from the config, or the default version.
+    ///
+    /// # Returns
+    ///
+    /// The PEP version string.
     ///
     pub fn get_pep_version(&self) -> &str {
         self.config
@@ -192,22 +319,50 @@ impl Project {
             .map_or(consts::DEFAULT_PEP_VERSION, |cfg| &cfg.pep_version)
     }
 
+    ///
+    /// Get the project description from the config, if set.
+    ///
+    /// # Returns
+    ///
+    /// The description string, or `None` if not set.
+    ///
     pub fn get_description(&self) -> Option<String> {
         self.config
             .as_ref()
             .map_or(None, |cfg| cfg.description.clone())
     }
 
+    ///
+    /// Get the project name from the config, if set.
+    ///
+    /// # Returns
+    ///
+    /// The project name, or `None` if not set.
+    ///
     pub fn get_name(&self) -> Option<String> {
         self.config.as_ref().map_or(None, |cfg| cfg.name.clone())
     }
 
+    ///
+    /// Set the project description in the config.
+    ///
+    /// # Arguments
+    ///
+    /// * `description` - The new description, or `None` to clear it.
+    ///
     pub fn set_description(&mut self, description: Option<String>) {
         if let Some(ref mut cfg) = self.config {
             cfg.description = description;
         }
     }
 
+    ///
+    /// Set the project name in the config.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The new name, or `None` to clear it.
+    ///
     pub fn set_name(&mut self, name: Option<String>) {
         if let Some(ref mut cfg) = self.config {
             cfg.name = name;
@@ -215,14 +370,22 @@ impl Project {
     }
 
     ///
-    /// Get the number of samples in the project
+    /// Get the number of samples in the project.
+    ///
+    /// # Returns
+    ///
+    /// The sample count.
     ///
     pub fn len(&self) -> usize {
         self.samples.height()
     }
 
     ///
-    /// Check if the project contains no samples
+    /// Check if the project contains no samples.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the project has zero samples.
     ///
     pub fn is_empty(&self) -> bool {
         self.samples.is_empty()
@@ -230,6 +393,14 @@ impl Project {
 
     ///
     /// Retrieve a sample by its sample name.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The sample name to look up.
+    ///
+    /// # Returns
+    ///
+    /// `Some(Sample)` if found, `None` if no match. Duplicates are merged.
     ///
     pub fn get_sample<'a>(&'a self, name: &str) -> PolarsResult<Option<Sample<'a>>> {
         let mask = self
@@ -264,14 +435,31 @@ impl Project {
     }
 
     ///
-    /// Retrieve multiple a samples by its sample names.
+    /// Retrieve multiple samples by their sample names.
+    ///
+    /// # Arguments
+    ///
+    /// * `names` - The sample names to look up.
+    ///
+    /// # Returns
+    ///
+    /// `Some(Sample)` if found, `None` if no match.
     ///
     pub fn get_samples<'a>(&'a self, names: Vec<&str>) -> PolarsResult<Option<Sample<'a>>> {
         panic!("get_samples not implemented yet!")
     }
 
     ///
-    /// The main entry point for loading the project configuration
+    /// Load and parse the project configuration from a YAML file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the YAML config file.
+    /// * `amendments` - Optional list of amendment names to activate.
+    ///
+    /// # Returns
+    ///
+    /// The parsed `ProjectConfig` with imports and amendments applied.
     ///
     pub fn load_project_config(
         path: impl AsRef<Path>,
@@ -293,12 +481,19 @@ impl Project {
         Self::parse_and_apply_project_modifiers(config, parent_dir, amendments)
     }
 
+    ///
+    /// Write processed samples to a JSON file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination file path.
+    ///
     pub fn write_json<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         let file = File::create(path.as_ref())?;
 
-        println!("Converting project to json file");
+        info!("Converting project to JSON file");
         if self.samples.height() > 100000 {
-            println!(
+            warn!(
                 "Project has more than 100K samples; conversion may take a while. Please be patient."
             );
         }
@@ -307,17 +502,24 @@ impl Project {
             .with_json_format(JsonFormat::Json)
             .finish(&mut self.samples)?;
 
-        println!(
-            "Processed project converted to json successfully and saved at {}",
-            path.as_ref().display()
+        info!(
+            path = %path.as_ref().display(),
+            "Project converted to JSON successfully"
         );
         Ok(())
     }
 
+    ///
+    /// Write processed samples to a YAML file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination file path.
+    ///
     pub fn write_yaml<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
-        println!("Converting project to yaml file");
+        info!("Converting project to YAML file");
         if self.samples.height() > 100000 {
-            println!(
+            warn!(
                 "Project has more than 100K samples; conversion may take a while. Please be patient."
             );
         }
@@ -332,13 +534,20 @@ impl Project {
         let file = File::create(path.as_ref())?;
         serde_yaml::to_writer(file, &value)?;
 
-        println!(
-            "Processed project converted to yaml successfully and saved at {}",
-            path.as_ref().display()
+        info!(
+            path = %path.as_ref().display(),
+            "Project converted to YAML successfully"
         );
         Ok(())
     }
 
+    ///
+    /// Write processed samples to a CSV file.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination file path.
+    ///
     pub fn write_csv<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         let mut file = File::create(path.as_ref())?;
 
@@ -347,13 +556,21 @@ impl Project {
             .with_separator(b',')
             .finish(&mut self.samples)?;
 
-        println!(
-            "Processed project successfully written to {:?}",
-            path.as_ref().display()
+        info!(
+            path = %path.as_ref().display(),
+            "Project written to CSV successfully"
         );
         Ok(())
     }
 
+    ///
+    /// Write raw project data to a folder or zip archive.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination path.
+    /// * `zipped` - If `Some(true)`, write as a zip archive; otherwise as a folder.
+    ///
     pub fn write_raw<P: AsRef<Path>>(
         &mut self,
         path: P,
@@ -367,6 +584,13 @@ impl Project {
         }
     }
 
+    ///
+    /// Write raw project (config, samples, subsamples) to a folder.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination folder path (created if missing).
+    ///
     pub fn write_raw_folder<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         let project_name = self.get_name().unwrap_or("default_name".to_string());
 
@@ -411,6 +635,13 @@ impl Project {
         Ok(())
     }
 
+    ///
+    /// Write raw project (config, samples, subsamples) to a zip archive.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Destination zip file path.
+    ///
     pub fn write_raw_zip<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         use ::zip::write::SimpleFileOptions;
         use ::zip::{CompressionMethod, ZipWriter};
@@ -464,6 +695,13 @@ impl Project {
         Ok(())
     }
 
+    ///
+    /// Write the raw project config as a JSON file into the given directory.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Directory to write `project_config.json` into.
+    ///
     pub fn write_config_json<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         if let Some(ref config) = self.config {
             if let Some(ref raw) = config.raw {
@@ -476,6 +714,13 @@ impl Project {
         Ok(())
     }
 
+    ///
+    /// Write the raw project config as a YAML file into the given directory.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Directory to write `project_config.yaml` into.
+    ///
     pub fn write_config_yaml<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         if let Some(ref config) = self.config {
             if let Some(ref raw) = config.raw {
@@ -488,29 +733,36 @@ impl Project {
         Ok(())
     }
 
-    pub fn print_json(&self) -> Result<(), Error> {
-        if self.samples.height() > 1000 {
-            println!("Project has more than 1K samples; unable to print. Use `save_json` instead.");
-            return Ok(());
-        }
-
+    ///
+    /// Return processed samples as a JSON string.
+    ///
+    /// # Returns
+    ///
+    /// Processed project as a `String` in JSON format.
+    ///
+    pub fn to_json_string(&self) -> Result<String, Error> {
+        // if self.samples.height() > 1000 {
+        //     println!("Project has more than 1K samples; unable to print. Use `save_json` instead.");
+        //     return Ok(());
+        // }
         let mut json_buf = Vec::new();
         let mut df = self.samples.clone();
         JsonWriter::new(&mut json_buf)
             .with_json_format(JsonFormat::Json)
             .finish(&mut df)?;
 
-        let output = String::from_utf8_lossy(&json_buf);
-        println!("{}", output);
-        Ok(())
+        let output = String::from_utf8_lossy(&json_buf).to_string();
+        Ok(output)
     }
 
-    pub fn print_yaml(&self) -> Result<(), Error> {
-        if self.samples.height() > 1000 {
-            println!("Project has more than 1K samples; unable to print. Use `save_yaml` instead.");
-            return Ok(());
-        }
-
+    ///
+    /// Return processed samples as a YAML string.
+    ///
+    /// # Returns
+    ///
+    /// Processed project as a `String` in YAML format.
+    ///
+    pub fn to_yaml_string(&self) -> Result<String, Error> {
         let mut json_buf = Vec::new();
         let mut df = self.samples.clone();
         JsonWriter::new(&mut json_buf)
@@ -519,16 +771,18 @@ impl Project {
 
         let value: serde_json::Value = serde_json::from_slice(&json_buf)?;
         let yaml_str = serde_yaml::to_string(&value)?;
-        println!("{}", yaml_str);
-        Ok(())
+        // println!("{}", yaml_str);
+        Ok(yaml_str)
     }
 
-    pub fn print_csv(&self) -> Result<(), Error> {
-        if self.samples.height() > 1000 {
-            println!("Project has more than 1K samples; unable to print. Use `save_csv` instead.");
-            return Ok(());
-        }
-
+    ///
+    /// Return processed samples as a CSV-formatted string.
+    ///
+    /// # Returns
+    ///
+    /// Processed project as a `String` in CSV format.
+    ///
+    pub fn to_csv_string(&self) -> Result<String, Error> {
         let mut csv_buf = Vec::new();
         let mut df = self.samples.clone();
         CsvWriter::new(&mut csv_buf)
@@ -537,13 +791,22 @@ impl Project {
             .finish(&mut df)?;
 
         let output = String::from_utf8_lossy(&csv_buf);
-        println!("{}", output);
-        Ok(())
+        // println!("{}", output);
+        Ok(output.to_string())
     }
 
     ///
-    /// Recursive helper function that consumes and returns a config
-    /// after applying and potential project modifiers
+    /// Recursively apply project modifiers (imports, amendments) to a config.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The config to modify.
+    /// * `base_path` - Base directory for resolving relative import paths.
+    /// * `amendments_to_activate` - Optional amendment names to apply.
+    ///
+    /// # Returns
+    ///
+    /// The config with all imports merged and amendments applied.
     ///
     fn parse_and_apply_project_modifiers(
         mut config: ProjectConfig,
@@ -587,8 +850,16 @@ impl Project {
     }
 
     ///
-    /// Create new Project object after parsing the project config. This
-    /// is an internal function to enable moer abstact wrappers
+    /// Create a new Project from a parsed config by loading sample/subsample CSVs.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The parsed project configuration.
+    /// * `config_dir` - Directory for resolving relative table paths.
+    ///
+    /// # Returns
+    ///
+    /// A fully constructed `Project`, or an error.
     ///
     fn new_from_parsed_config<P>(config: ProjectConfig, config_dir: P) -> Result<Self, Error>
     where
@@ -634,10 +905,19 @@ impl Project {
     }
 
     ///
-    /// Finally parse and create the project. This takes a parsed project configuration,
-    /// and a raw sample table (as a [`DataFrame`]) and then applies all sample modifiers
-    /// and merges subsamples.
-    pub fn finalize_project_creation(
+    /// Finalize project creation by applying sample modifiers and merging subsamples.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The parsed project configuration.
+    /// * `samples_df_raw` - The raw sample table as a DataFrame.
+    /// * `subsamples` - Optional subsample DataFrames to merge.
+    ///
+    /// # Returns
+    ///
+    /// A fully constructed `Project`, or an error.
+    ///
+    fn finalize_project_creation(
         config: ProjectConfig,
         samples_df_raw: DataFrame,
         subsamples: Option<Vec<DataFrame>>,
@@ -647,14 +927,24 @@ impl Project {
             .as_deref()
             .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX);
 
+        let subsample_indexes: Option<Vec<String>> = match subsamples {
+            Some(_) => Some(
+                config
+                    .subsample_table_index
+                    .clone()
+                    .unwrap_or(vec![DEFAULT_SUBSAMPLE_TABLE_INDEX.to_string()]),
+            ),
+            _ => None,
+        };
+
         let mut samples_lf = Some(samples_df_raw.clone().lazy());
 
         // check if sample table has duplicated sample names
         let sample_col = samples_df_raw.column(sample_table_index)?;
         let has_duplicates = sample_col.n_unique()? < sample_col.len();
         if has_duplicates {
-            println!(
-                "WARNING: Sample table contains duplicated samples, bugs can appear. \
+            warn!(
+                "Sample table contains duplicated samples, bugs can appear. \
                       We strongly encourage using subsample tables!"
             );
         }
@@ -693,11 +983,12 @@ impl Project {
 
                         let mut condition: Option<Expr> = None;
                         for (attr_name, imply_condition) in &rule.if_condition {
+                            let col_as_str = col(attr_name).cast(DataType::String);
                             let attr_cond = match imply_condition {
-                                ImplyCondition::Single(val) => col(attr_name).eq(lit(val.clone())),
+                                ImplyCondition::Single(val) => col_as_str.eq(lit(val.clone())),
                                 ImplyCondition::Multiple(vals) => {
                                     vals.iter().fold(lit(false), |acc, v| {
-                                        acc.or(col(attr_name).eq(lit(v.clone())))
+                                        acc.or(col_as_str.clone().eq(lit(v.clone())))
                                     })
                                 }
                             };
@@ -727,26 +1018,6 @@ impl Project {
                     }
                 }
 
-                // DERIVE
-                if let Some(derive_rule) = &modifiers.derive {
-                    for col_to_derive in &derive_rule.attributes {
-                        // start with the original column as the final "else" case
-                        let mut final_expr = col(col_to_derive);
-
-                        // chain a when-then for each source template
-                        for (key, template) in &derive_rule.sources {
-                            let template_expr = build_derive_template_expr(template)?;
-
-                            final_expr = when(col(col_to_derive).eq(lit(key.clone())))
-                                .then(template_expr)
-                                .otherwise(final_expr);
-                        }
-
-                        // apply the chained expression to the DataFrame
-                        new_lf = new_lf.with_column(final_expr.alias(col_to_derive));
-                    }
-                }
-
                 // after all potential modifications, re-assign
                 samples_lf = Some(new_lf)
             }
@@ -757,6 +1028,16 @@ impl Project {
         if let Some(ref sub_dfs) = subsamples {
             if let Some(lf) = samples_lf.take() {
                 samples_lf = Some(Self::merge_subsamples(lf, sub_dfs, sample_table_index)?);
+            }
+        }
+
+        // DERIVE — runs after subsample merge so all columns (including list-typed
+        // ones from subsamples) are available. Handles both scalar and list cases.
+        if let Some(modifiers) = &config.sample_modifiers {
+            if let Some(derive_rule) = &modifiers.derive {
+                if let Some(lf) = samples_lf.take() {
+                    samples_lf = Some(Self::apply_derive(lf, derive_rule)?);
+                }
             }
         }
 
@@ -772,9 +1053,11 @@ impl Project {
             samples: samples.unwrap_or(DataFrame::empty()),
             samples_raw: samples_df_raw,
             subsamples,
+            subsample_table_index: subsample_indexes,
         })
     }
 
+    ///
     /// Merge subsample DataFrames into the samples LazyFrame.
     ///
     /// For each subsample table:
@@ -782,6 +1065,18 @@ impl Project {
     /// 2. Left-join onto samples
     /// 3. For overlapping columns, subsample list replaces the sample value;
     ///    samples without subsamples get their original value wrapped in a single-element list
+    ///
+    /// # Arguments
+    ///
+    /// * `samples_lf` - The samples LazyFrame to merge into.
+    /// * `subsamples` - Subsample DataFrames to merge.
+    /// * `sample_table_index` - Name of the index column present in both `samples_lf`
+    ///   and each subsample DataFrame, used as the join key.
+    ///
+    /// # Returns
+    ///
+    /// The merged LazyFrame with subsample columns as lists.
+    ///
     fn merge_subsamples(
         samples_lf: LazyFrame,
         subsamples: &[DataFrame],
@@ -844,20 +1139,120 @@ impl Project {
         Ok(result_lf)
     }
 
+    /// Apply derive modifier on a LazyFrame, handling both scalar and List columns.
     ///
-    /// Iterate over the samples in the project
+    /// For scalar columns, applies the when-then derive chain directly.
+    /// For List columns (from subsample merge), explodes to scalar rows first,
+    /// applies the derive chain, then implodes back.
+    fn apply_derive(
+        lf: LazyFrame,
+        derive_rule: &crate::config::DeriveRule,
+    ) -> Result<LazyFrame, Error> {
+        let mut result = lf;
+
+        for col_to_derive in &derive_rule.attributes {
+            let mut involved_cols: Vec<String> = vec![col_to_derive.clone()];
+            for template in derive_rule.sources.values() {
+                involved_cols.extend(extract_template_columns(template));
+            }
+            involved_cols.sort();
+            involved_cols.dedup();
+
+            let schema = result.collect_schema()?;
+            let list_cols: Vec<String> = involved_cols
+                .iter()
+                .filter(|c| matches!(schema.get(c.as_str()), Some(DataType::List(_))))
+                .cloned()
+                .collect();
+
+            // build the when-then derive chain
+            let mut final_expr = col(col_to_derive);
+            for (key, template) in &derive_rule.sources {
+                let template_expr = build_derive_template_expr(template)?;
+                final_expr = when(
+                    col(col_to_derive)
+                        .cast(DataType::String)
+                        .eq(lit(key.clone())),
+                )
+                .then(template_expr)
+                .otherwise(final_expr);
+            }
+
+            if list_cols.is_empty() {
+                // scalar path — apply directly
+                result = result.with_column(final_expr.alias(col_to_derive));
+            } else {
+                // list path — explode, derive, implode back
+                let row_idx = "__derive_row_idx";
+                let mut work = result.with_row_index(row_idx, None);
+
+                let explode_names: Vec<&str> = list_cols.iter().map(|c| c.as_str()).collect();
+                work = work.explode(cols(explode_names));
+                work = work.with_column(final_expr.alias(col_to_derive));
+
+                // re-aggregate: implode exploded + derived cols, first() for the rest
+                let agg_schema = work.collect_schema()?;
+                let mut cols_to_implode = list_cols;
+                if !cols_to_implode.contains(&col_to_derive.to_string()) {
+                    cols_to_implode.push(col_to_derive.clone());
+                }
+
+                let agg_exprs: Vec<Expr> = agg_schema
+                    .iter_names()
+                    .filter(|n| n.as_str() != row_idx)
+                    .map(|n| {
+                        if cols_to_implode.iter().any(|c| c.as_str() == n.as_str()) {
+                            col(n.clone())
+                        } else {
+                            col(n.clone()).first()
+                        }
+                    })
+                    .collect();
+
+                result = work
+                    .group_by([col(row_idx)])
+                    .agg(agg_exprs)
+                    .sort([row_idx], SortMultipleOptions::default())
+                    .drop(cols([row_idx]));
+            }
+        }
+
+        Ok(result)
+    }
+
+    ///
+    /// Iterate over the processed samples in the project.
+    ///
+    /// # Returns
+    ///
+    /// A [`SamplesIter`] over processed samples.
     ///
     pub fn iter_samples(&'_ self) -> SamplesIter<'_> {
         SamplesIter::new(&self.samples)
     }
 
     ///
-    /// Iterate over the raw, unprocessed samples in the project
+    /// Iterate over the raw, unprocessed samples in the project.
+    ///
+    /// # Returns
+    ///
+    /// A [`SamplesIter`] over raw samples (before modifiers).
     ///
     pub fn iter_samples_raw(&'_ self) -> SamplesIter<'_> {
         SamplesIter::new(&self.samples_raw)
     }
 
+    ///
+    /// Generate a WDL input JSON string by mapping sample columns to WDL inputs.
+    ///
+    /// # Arguments
+    ///
+    /// * `options` - WDL input parsing options (source file, name, etc.).
+    ///
+    /// # Returns
+    ///
+    /// A pretty-printed JSON string of mapped WDL inputs per sample.
+    ///
     #[cfg(feature = "wdl")]
     pub fn to_mapped_wdl_input(&self, options: WdlInputParsingOptions) -> Result<String, Error> {
         use serde_json::{Map, Value};
@@ -986,6 +1381,7 @@ mod tests {
     #[case("../example-peps/example_derive/project_config.yaml")]
     #[case("../example-peps/example_imports/project_config.yaml")]
     #[case("../example-peps/example_amendments1/project_config.yaml")]
+    #[case("../example-peps/example_derive_imply/project_config.yaml")]
     fn instantiate_pep(#[case] cfg_path: &'static str) {
         let proj = Project::from_config(cfg_path).build();
         let proj = proj.unwrap();
@@ -1230,7 +1626,7 @@ mod tests {
 
     #[rstest]
     #[case("../example-peps/example_subtable1/project_config.yaml")]
-    // case subtable2 skipped: derive references column only in subsample table (needs subsample-aware derive)
+    #[case("../example-peps/example_subtable2/project_config.yaml")]
     #[case("../example-peps/example_subtable3/project_config.yaml")]
     #[case("../example-peps/example_subtable4/project_config.yaml")]
     #[case("../example-peps/example_subtable5/project_config.yaml")]
@@ -1289,5 +1685,92 @@ mod tests {
         // frog_1 has 3 subsamples for read1/read2
         let frog1_read1 = read1_col.list().unwrap().get_as_series(0).unwrap();
         assert_eq!(frog1_read1.len(), 3);
+    }
+
+    #[rstest]
+    fn subtable2_derive_with_subsamples() {
+        let proj = Project::from_config("../example-peps/example_subtable2/project_config.yaml")
+            .build()
+            .unwrap();
+
+        let file_col = proj.samples.column("file").unwrap();
+        assert!(
+            matches!(file_col.dtype(), DataType::List(_)),
+            "Expected List type for 'file', got {:?}",
+            file_col.dtype()
+        );
+
+        // sorted: frog_1(0), frog_2(1), frog_3(2), frog_4(3)
+        // frog_1: local_files with file_id=[a,b,c] → 3 derived paths
+        let frog1 = file_col.list().unwrap().get_as_series(0).unwrap();
+        assert_eq!(frog1.len(), 3);
+        let frog1_vals: Vec<String> = frog1
+            .str()
+            .unwrap()
+            .into_no_null_iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(
+            frog1_vals,
+            vec![
+                "../data/frog1a_data.txt",
+                "../data/frog1b_data.txt",
+                "../data/frog1c_data.txt",
+            ]
+        );
+
+        // frog_2: local_files with file_id=[a,b] → 2 derived paths
+        let frog2 = file_col.list().unwrap().get_as_series(1).unwrap();
+        assert_eq!(frog2.len(), 2);
+
+        // frog_3: local_files_unmerged (no file_id) → 1 derived path
+        let frog3 = file_col.list().unwrap().get_as_series(2).unwrap();
+        assert_eq!(frog3.len(), 1);
+        let frog3_val = frog3.str().unwrap().get(0).unwrap();
+        assert_eq!(frog3_val, "../data/frog3_data.txt");
+
+        // frog_4: local_files_unmerged → 1 derived path
+        let frog4 = file_col.list().unwrap().get_as_series(3).unwrap();
+        assert_eq!(frog4.len(), 1);
+        let frog4_val = frog4.str().unwrap().get(0).unwrap();
+        assert_eq!(frog4_val, "../data/frog4_data.txt");
+    }
+
+    #[rstest]
+    fn subtable3_derive_with_subsamples() {
+        let proj = Project::from_config("../example-peps/example_subtable3/project_config.yaml")
+            .build()
+            .unwrap();
+
+        let file_col = proj.samples.column("file").unwrap();
+        assert!(
+            matches!(file_col.dtype(), DataType::List(_)),
+            "Expected List type for 'file', got {:?}",
+            file_col.dtype()
+        );
+
+        // frog_1: local_files with file_id=[a,b,c] → 3 derived paths
+        let frog1 = file_col.list().unwrap().get_as_series(0).unwrap();
+        assert_eq!(frog1.len(), 3);
+        let frog1_vals: Vec<String> = frog1
+            .str()
+            .unwrap()
+            .into_no_null_iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(
+            frog1_vals,
+            vec![
+                "../data/frog1a_data.txt",
+                "../data/frog1b_data.txt",
+                "../data/frog1c_data.txt",
+            ]
+        );
+
+        // frog_2-4: local_files_unmerged → uses {identifier}*_data.txt
+        let frog2 = file_col.list().unwrap().get_as_series(1).unwrap();
+        assert_eq!(frog2.len(), 1);
+        let frog2_val = frog2.str().unwrap().get(0).unwrap();
+        assert_eq!(frog2_val, "../data/frog2*_data.txt");
     }
 }
