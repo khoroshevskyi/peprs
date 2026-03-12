@@ -3,14 +3,27 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+use polars::prelude::AnyValue::Null;
 use polars::prelude::*;
 
+///
+/// A single sample represented as a column-name to value map.
+///
 #[derive(Debug, Clone)]
 pub struct Sample<'a>(HashMap<String, AnyValue<'a>>);
 
 impl<'a> Sample<'a> {
     ///
-    /// Create a new Sample object from a data frame and row index
+    /// Create a new Sample from a single DataFrame row.
+    ///
+    /// # Arguments
+    ///
+    /// * `df` - The source DataFrame.
+    /// * `row_index` - The zero-based row index to extract.
+    ///
+    /// # Returns
+    ///
+    /// A `Sample` containing column-name to value pairs for the given row.
     ///
     pub fn from_dataframe_row(df: &'a DataFrame, row_index: usize) -> PolarsResult<Self> {
         let mut sample = HashMap::new();
@@ -25,7 +38,57 @@ impl<'a> Sample<'a> {
     }
 
     ///
-    /// Convert the Sample into an owned HashMap, via cloning
+    /// Create a new Sample by merging multiple rows with the same sample name.
+    /// Columns where all values are identical are stored as scalars.
+    /// Columns where values differ are collapsed into a list.
+    ///
+    /// # Arguments
+    ///
+    /// * `df` - The source DataFrame.
+    /// * `row_indexs` - Zero-based row indices to merge.
+    ///
+    /// # Returns
+    ///
+    /// A `Sample` with scalar or list values depending on uniqueness.
+    ///
+    pub fn from_df_duplicated_rows(
+        df: &'a DataFrame,
+        row_indexs: Vec<usize>,
+    ) -> PolarsResult<Self> {
+        if row_indexs.len() == 1 {
+            return Self::from_dataframe_row(df, row_indexs[0]);
+        }
+
+        let mut sample = HashMap::new();
+
+        for (col_idx, series) in df.get_columns().iter().enumerate() {
+            let column_name = df.get_column_names()[col_idx].to_string();
+
+            let values: Vec<AnyValue> = row_indexs
+                .iter()
+                .map(|&ri| series.get(ri))
+                .collect::<PolarsResult<Vec<_>>>()?;
+
+            let all_same = values.windows(2).all(|w| w[0] == w[1]);
+
+            if all_same {
+                sample.insert(column_name, values.into_iter().next().unwrap());
+            } else {
+                let list_series =
+                    Series::from_any_values(PlSmallStr::from_str(&column_name), &values, false)?;
+                sample.insert(column_name, AnyValue::List(list_series));
+            }
+        }
+
+        Ok(Sample(sample))
+    }
+
+    ///
+    /// Convert the Sample into an owned HashMap of string values.
+    ///
+    /// # Returns
+    ///
+    /// A `HashMap<String, String>` with all values converted via `to_string()`.
     ///
     pub fn into_map(self) -> HashMap<String, String> {
         self.0
@@ -60,6 +123,17 @@ pub struct SamplesIter<'a> {
 }
 
 impl<'a> SamplesIter<'a> {
+    ///
+    /// Creates a new iterator over rows of the given DataFrame.
+    ///
+    /// # Arguments
+    ///
+    /// * `df` - The DataFrame to iterate over.
+    ///
+    /// # Returns
+    ///
+    /// A `SamplesIter` yielding one [`Sample`] per row.
+    ///
     pub fn new(df: &'a DataFrame) -> Self {
         let column_names = df
             .get_column_names()

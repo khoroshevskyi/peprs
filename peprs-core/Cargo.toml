@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-polars = { version = "x", features = ["lazy", "is_in", "replace", "strings", "concat_str"]}
+polars = { version = "x", features = ["lazy", "is_in", "replace", "strings", "concat_str", "json", "cloud"]}
 chrono = "0.4.42"
 serde = { version = "1.0.226", features = ["derive"] }
 serde_yaml = "0.9.34"
@@ -13,6 +13,8 @@ itertools = "0.14.0"
 regex = "1.11.3"
 shellexpand = "3.1.1"
 serde_json = "1.0.145"
+zip = "8.2"
+tracing = "0.1.44"
 wdl = { version = "0.19.0", optional = true }
 tokio = { version = "1.48.0", features = ["rt", "rt-multi-thread", "macros"] }
 

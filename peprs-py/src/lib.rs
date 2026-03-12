@@ -1,6 +1,7 @@
 pub mod error;
 pub mod project;
 pub mod samples;
+pub mod utils;
 
 use pyo3::prelude::*;
 

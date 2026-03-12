@@ -34,21 +34,62 @@ pub enum Error {
     /// Project missing required attribute/input error
     #[error("Project missing required attribute: {0}")]
     ProjectMissingAttribute(String),
+
+    /// JSON serialization/deserialization errors
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+
+    /// Zip archive errors
+    #[error("Zip error: {0}")]
+    Zip(#[from] zip::result::ZipError),
 }
 
 /// Result type alias for convenience
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Helper functions for creating specific error types
+/// Helper functions for creating specific error types.
 impl Error {
+    ///
+    /// Creates a configuration error.
+    ///
+    /// # Arguments
+    ///
+    /// * `msg` - The error message.
+    ///
+    /// # Returns
+    ///
+    /// A new [`Error::Config`] variant.
+    ///
     pub fn config<S: Into<String>>(msg: S) -> Self {
         Error::Config(msg.into())
     }
 
+    ///
+    /// Creates a processing error.
+    ///
+    /// # Arguments
+    ///
+    /// * `msg` - The error message.
+    ///
+    /// # Returns
+    ///
+    /// A new [`Error::Processing`] variant.
+    ///
     pub fn processing<S: Into<String>>(msg: S) -> Self {
         Error::Processing(msg.into())
     }
 
+    ///
+    /// Creates an invalid format error.
+    ///
+    /// # Arguments
+    ///
+    /// * `msg` - The error message.
+    ///
+    /// # Returns
+    ///
+    /// A new [`Error::InvalidFormat`] variant.
+    ///
     pub fn invalid_format<S: Into<String>>(msg: S) -> Self {
         Error::InvalidFormat(msg.into())
     }
