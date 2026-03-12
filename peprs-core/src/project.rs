@@ -114,11 +114,11 @@ impl ProjectBuilder {
     ///
     /// # Arguments
     ///
-    /// * `index` - Column name to use as the sample table index.
+    /// * `index` - Column names to use as the subsample table index.
     ///
     /// # Returns
     ///
-    /// The builder with the custom index set.
+    /// The builder with the custom subsample index set.
     ///
     pub fn with_subsample_table_index(mut self, index: &[String]) -> Self {
         self.subsample_table_index = Some(index.to_vec());
@@ -150,6 +150,11 @@ impl ProjectBuilder {
 
                 let mut final_config = config;
                 final_config.sample_table_index = Some(final_index);
+
+                // honor the subsample_table_index from the builder, if provided
+                if let Some(sub_idx) = self.subsample_table_index {
+                    final_config.subsample_table_index = Some(sub_idx);
+                }
 
                 Project::new_from_parsed_config(final_config, config_dir)
             }
@@ -198,6 +203,10 @@ impl ProjectBuilder {
                 // honor the sample_table_index from the builder, if provided
                 if let Some(idx) = self.sample_table_index {
                     config.sample_table_index = Some(idx);
+                }
+                // honor the subsample_table_index from the builder, if provided
+                if let Some(sub_idx) = self.subsample_table_index {
+                    config.subsample_table_index = Some(sub_idx);
                 }
                 // call the shared logic
                 Project::finalize_project_creation(config, samples, subsamples)
@@ -725,11 +734,11 @@ impl Project {
     }
 
     ///
-    /// Print processed samples as JSON to stdout.
+    /// Return processed samples as a JSON string.
     ///
     /// # Returns
     ///
-    /// Processed Project as String in JSON format
+    /// Processed project as a `String` in JSON format.
     ///
     pub fn to_json_string(&self) -> Result<String, Error> {
         // if self.samples.height() > 1000 {
@@ -747,11 +756,11 @@ impl Project {
     }
 
     ///
-    /// Print processed samples as YAML to stdout.
+    /// Return processed samples as a YAML string.
     ///
     /// # Returns
     ///
-    /// Processed Project as String in YAML format
+    /// Processed project as a `String` in YAML format.
     ///
     pub fn to_yaml_string(&self) -> Result<String, Error> {
         let mut json_buf = Vec::new();
@@ -767,11 +776,11 @@ impl Project {
     }
 
     ///
-    /// Print processed samples as CSV to stdout.
+    /// Return processed samples as a CSV-formatted string.
     ///
     /// # Returns
     ///
-    /// Processed Project as String in csv format
+    /// Processed project as a `String` in CSV format.
     ///
     pub fn to_csv_string(&self) -> Result<String, Error> {
         let mut csv_buf = Vec::new();
@@ -1061,7 +1070,8 @@ impl Project {
     ///
     /// * `samples_lf` - The samples LazyFrame to merge into.
     /// * `subsamples` - Subsample DataFrames to merge.
-    /// * `sample_table_index` - Column name used as the join key. (is it correct? Should it be subsample_table_index)
+    /// * `sample_table_index` - Name of the index column present in both `samples_lf`
+    ///   and each subsample DataFrame, used as the join key.
     ///
     /// # Returns
     ///

@@ -393,7 +393,7 @@ impl PyProject {
     }
 
     ///
-    /// Print processed samples as YAML to stdout.
+    /// Return processed samples as a YAML string.
     ///
     pub fn to_yaml_string(&self) -> PyResult<String> {
         self.inner
@@ -402,7 +402,7 @@ impl PyProject {
     }
 
     ///
-    /// Print processed samples as JSON to stdout.
+    /// Return processed samples as a JSON string.
     ///
     pub fn to_json_string(&self) -> PyResult<String> {
         self.inner
@@ -411,7 +411,7 @@ impl PyProject {
     }
 
     ///
-    /// Print processed samples as CSV to stdout.
+    /// Return processed samples as a CSV string.
     ///
     /// Falls back to Pandas export if the Polars CSV writer fails.
     ///
@@ -560,14 +560,14 @@ impl PyProject {
     }
 
     ///
-    /// Return a number of samples of the PEP
+    /// Return the number of samples in the PEP.
     ///
     fn __len__(&self) -> PyResult<usize> {
         Ok(self.inner.len())
     }
 
     ///
-    /// Return a number of samples of the PEP
+    /// Return the number of samples in the PEP.
     ///
     fn len(&self) -> PyResult<usize> {
         Ok(self.inner.len())
