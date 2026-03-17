@@ -2,6 +2,27 @@ use std::sync::LazyLock;
 
 use polars::prelude::*;
 use regex::Regex;
+use serde_json::Value;
+
+/// Convert a Polars `AnyValue` into a `serde_json::Value`, preserving type information.
+pub fn any_value_to_json(any_value: AnyValue) -> Value {
+    match any_value {
+        AnyValue::Null => Value::Null,
+        AnyValue::Boolean(b) => Value::Bool(b),
+        AnyValue::String(s) => Value::String(s.to_string()),
+        AnyValue::Float32(f) => Value::from(f),
+        AnyValue::Float64(f) => Value::from(f),
+        AnyValue::Int8(i) => Value::from(i),
+        AnyValue::Int16(i) => Value::from(i),
+        AnyValue::Int32(i) => Value::from(i),
+        AnyValue::Int64(i) => Value::from(i),
+        AnyValue::UInt8(u) => Value::from(u),
+        AnyValue::UInt16(u) => Value::from(u),
+        AnyValue::UInt32(u) => Value::from(u),
+        AnyValue::UInt64(u) => Value::from(u),
+        av => Value::String(av.to_string()),
+    }
+}
 
 static RE_BRACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\{([^}]+)\}").unwrap());
 

@@ -21,25 +21,6 @@ use crate::wdl::get_inputs_from_wdl;
 #[cfg(feature = "wdl")]
 use serde_json::Value;
 
-#[cfg(feature = "wdl")]
-fn any_value_to_json(any_value: AnyValue) -> Value {
-    match any_value {
-        AnyValue::Null => Value::Null,
-        AnyValue::Boolean(b) => Value::Bool(b),
-        AnyValue::String(s) => Value::String(s.to_string()),
-        AnyValue::Float32(f) => Value::from(f),
-        AnyValue::Float64(f) => Value::from(f),
-        AnyValue::Int8(i) => Value::from(i),
-        AnyValue::Int16(i) => Value::from(i),
-        AnyValue::Int32(i) => Value::from(i),
-        AnyValue::Int64(i) => Value::from(i),
-        AnyValue::UInt8(u) => Value::from(u),
-        AnyValue::UInt16(u) => Value::from(u),
-        AnyValue::UInt32(u) => Value::from(u),
-        AnyValue::UInt64(u) => Value::from(u),
-        av => Value::String(av.to_string()),
-    }
-}
 
 // Define the possible sources for a project
 #[allow(clippy::large_enum_variant)]
@@ -1292,7 +1273,7 @@ impl Project {
 
                 // If the PEP has this column, get the value and add it to the JSON
                 if let Some(any_value) = sample.get(wdl_input_name) {
-                    let json_value = any_value_to_json(any_value.clone());
+                    let json_value = crate::utils::any_value_to_json(any_value.clone());
                     sample_map.insert(wdl_input_name.to_string(), json_value);
                 }
             }

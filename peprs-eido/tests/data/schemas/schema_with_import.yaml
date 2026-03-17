@@ -1,0 +1,16 @@
+description: "Schema that imports a base schema"
+imports:
+  - schema_base.yaml
+properties:
+  samples:
+    type: array
+    items:
+      type: object
+      properties:
+        sample_name:
+          type: string
+        protocol:
+          type: string
+      required:
+        - sample_name
+        - protocol

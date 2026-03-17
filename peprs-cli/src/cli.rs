@@ -25,10 +25,14 @@ pub enum Commands {
         name: Option<String>,
     },
 
-    /// Validate a project, ensuring it meets the required schema
+    /// Validate a project against an eido schema
     Validate {
         /// Path to the project configuration yaml file.
         path: String,
+
+        /// Path to the eido schema file (YAML or JSON).
+        #[arg(short = 's', long = "schema")]
+        schema: String,
     },
 
     /// Convert samples into an input format for pipeline

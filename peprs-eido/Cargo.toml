@@ -1,0 +1,19 @@
+[package]
+name = "peprs-eido"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+peprs-core = { path = "../peprs-core" }
+polars = { version = "0.51", features = ["lazy", "json"] }
+polars-jsonschema-bridge = "0.7.0"
+jsonschema = "0.29"
+serde_json = "1.0"
+serde_yaml = "0.9"
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2.0"
+tracing = "0.1"
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"
+rstest = "0.26.1"

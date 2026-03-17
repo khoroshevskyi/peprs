@@ -49,7 +49,38 @@ fn main() {
                 }
             }
         }
-        Commands::Validate { path } => todo!(),
+        Commands::Validate { path, schema } => {
+            let proj = Project::from_config(path).build();
+            match proj {
+                Ok(proj) => match peprs_eido::validate(&proj, schema) {
+                    Ok(()) => {
+                        println!("Validation successful.");
+                    }
+                    Err(peprs_eido::error::EidoError::Validation(errors)) => {
+                        eprintln!("Validation failed with {} error(s):", errors.len());
+                        for err in &errors {
+                            eprintln!("  - {}", err);
+                        }
+                        std::process::exit(1);
+                    }
+                    Err(peprs_eido::error::EidoError::MissingFiles(missing)) => {
+                        eprintln!("Missing required files ({}):", missing.len());
+                        for m in &missing {
+                            eprintln!("  - {}", m);
+                        }
+                        std::process::exit(1);
+                    }
+                    Err(err) => {
+                        eprintln!("Validation error: {}", err);
+                        std::process::exit(1);
+                    }
+                },
+                Err(err) => {
+                    eprintln!("Error parsing PEP: {}", err);
+                    std::process::exit(1);
+                }
+            }
+        }
         Commands::Convert {
             path,
             schema,

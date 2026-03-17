@@ -1,0 +1,11 @@
+description: "Base schema for import testing"
+properties:
+  samples:
+    type: array
+    items:
+      type: object
+      properties:
+        sample_name:
+          type: string
+      required:
+        - sample_name

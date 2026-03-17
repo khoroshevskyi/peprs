@@ -1,0 +1,16 @@
+description: "Schema with tangible file validation"
+properties:
+  samples:
+    type: array
+    items:
+      type: object
+      properties:
+        sample_name:
+          type: string
+        file:
+          type: string
+      required:
+        - sample_name
+        - file
+tangible:
+  - file
