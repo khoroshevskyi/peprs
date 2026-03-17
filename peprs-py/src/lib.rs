@@ -1,3 +1,4 @@
+pub mod eido;
 pub mod error;
 pub mod project;
 pub mod samples;
@@ -11,5 +12,6 @@ use project::PyProject;
 #[pymodule]
 fn peprs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyProject>()?;
+    eido::register_eido_module(m)?;
     Ok(())
 }

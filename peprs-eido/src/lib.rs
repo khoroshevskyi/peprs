@@ -48,6 +48,15 @@ pub fn validate_samples(project: &Project, schema_path: &str) -> Result<()> {
     validate::validate_samples(project, &schema)
 }
 
+/// Validate a single sample (as a JSON value) against a pre-loaded schema.
+pub fn validate_single_sample(
+    sample: &serde_json::Value,
+    schema: &EidoSchema,
+    sample_name: &str,
+) -> Result<()> {
+    validate::validate_single_sample(sample, schema, sample_name)
+}
+
 /// Validate that tangible file attributes point to existing files.
 pub fn validate_input_files(project: &Project, schema_path: &str) -> Result<()> {
     let schema = schema::load_schema(schema_path)?;

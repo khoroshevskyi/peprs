@@ -4,18 +4,21 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-polars = { version = "x", features = ["lazy", "is_in", "replace", "strings", "concat_str", "json", "cloud"]}
-chrono = "0.4.42"
-serde = { version = "1.0.226", features = ["derive"] }
-serde_yaml = "0.9.34"
-serde_json = "1.0.145"
-thiserror = "2.0.16"
-itertools = "0.14.0"
+polars = { workspace = true }
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
 regex = "1.11.3"
 shellexpand = "3.1.1"
 
+#chrono = "0.4.42"
+#itertools = "0.14.0"
+
 zip = "8.2"
-tracing = "0.1.44"
+
 wdl = { version = "0.19.0", optional = true }
 tokio = { version = "1.48.0", features = ["rt", "rt-multi-thread", "macros"] }
 
