@@ -24,7 +24,11 @@ fn test_validate_samples_works() {
         .expect("Failed to load schema");
     let project = load_project("test_pep");
     let result = peprs_eido::validate::validate_samples(&project, &schema);
-    assert!(result.is_ok(), "Expected sample validation to pass: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Expected sample validation to pass: {:?}",
+        result
+    );
 }
 
 /// Python: TestSampleValidation.test_validate_detects_invalid
@@ -60,5 +64,9 @@ fn test_validate_samples_with_required_genome() {
         .expect("Failed to load schema");
     let project = load_project("test_pep");
     let result = peprs_eido::validate::validate_samples(&project, &schema);
-    assert!(result.is_ok(), "Expected sample validation to pass (genome from imply): {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Expected sample validation to pass (genome from imply): {:?}",
+        result
+    );
 }

@@ -88,7 +88,8 @@ fn test_validate_basic_passes() {
 #[test]
 fn test_validate_missing_required_column() {
     let project = load_basic_project();
-    let result = peprs_eido::validate_samples(&project, &test_schema_path("schema_missing_col.yaml"));
+    let result =
+        peprs_eido::validate_samples(&project, &test_schema_path("schema_missing_col.yaml"));
 
     match result {
         Err(EidoError::Validation(errors)) => {
@@ -146,10 +147,8 @@ fn test_validate_project_level() {
 #[test]
 fn test_validate_with_import_chain() {
     let project = load_basic_project();
-    let result = peprs_eido::validate_samples(
-        &project,
-        &test_schema_path("schema_with_import.yaml"),
-    );
+    let result =
+        peprs_eido::validate_samples(&project, &test_schema_path("schema_with_import.yaml"));
     assert!(
         result.is_ok(),
         "Expected validation with imports to pass: {:?}",
@@ -176,7 +175,10 @@ fn test_validate_detects_invalid() {
         .expect("Failed to load schema");
     let project = load_project("test_pep");
     let result = peprs_eido::validate_with_schema(&project, &schema);
-    assert!(result.is_err(), "Expected validation to fail for schema requiring 'invalid' property");
+    assert!(
+        result.is_err(),
+        "Expected validation to fail for schema requiring 'invalid' property"
+    );
 }
 
 #[test]
@@ -186,7 +188,10 @@ fn test_validate_detects_invalid_imports() {
         .expect("Failed to load schema");
     let project = load_project("test_pep");
     let result = peprs_eido::validate_with_schema(&project, &schema);
-    assert!(result.is_err(), "Expected validation to fail: my_numeric_attribute is missing");
+    assert!(
+        result.is_err(),
+        "Expected validation to fail: my_numeric_attribute is missing"
+    );
 }
 
 #[test]
@@ -208,7 +213,11 @@ fn test_validate_works_with_dict_schema() {
         .expect("Failed to load schema from value");
     let project = load_project("test_pep");
     let result = peprs_eido::validate_with_schema(&project, &schema);
-    assert!(result.is_ok(), "Expected validation to pass with dict schema: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Expected validation to pass with dict schema: {:?}",
+        result
+    );
 }
 
 #[test]
@@ -236,7 +245,10 @@ fn test_validate_value_check() {
         .expect("Failed to load schema");
     let project = load_project("value_check_pep");
     let result = peprs_eido::validate_with_schema(&project, &schema);
-    assert!(result.is_err(), "Expected validation to fail: format_type has invalid enum values");
+    assert!(
+        result.is_err(),
+        "Expected validation to fail: format_type has invalid enum values"
+    );
 }
 
 // --- File existence validation ---

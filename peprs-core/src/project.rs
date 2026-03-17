@@ -21,7 +21,6 @@ use crate::wdl::get_inputs_from_wdl;
 #[cfg(feature = "wdl")]
 use serde_json::Value;
 
-
 // Define the possible sources for a project
 #[allow(clippy::large_enum_variant)]
 enum ProjectSource {

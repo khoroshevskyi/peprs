@@ -35,9 +35,8 @@ pub fn validate_samples(project: &Project, schema: &EidoSchema) -> Result<()> {
     }
 
     // Strategy A: Per-sample JSON Schema validation
-    let validator = jsonschema::validator_for(sample_schema).map_err(|e| {
-        EidoError::SchemaCompile(format!("Failed to compile sample schema: {e}"))
-    })?;
+    let validator = jsonschema::validator_for(sample_schema)
+        .map_err(|e| EidoError::SchemaCompile(format!("Failed to compile sample schema: {e}")))?;
 
     // Use Project.to_json_string() to bulk-convert samples to JSON
     let json_str = project
@@ -98,9 +97,8 @@ pub fn validate_project(project: &Project, schema: &EidoSchema) -> Result<()> {
         None => Value::Object(serde_json::Map::new()),
     };
 
-    let validator = jsonschema::validator_for(project_schema).map_err(|e| {
-        EidoError::SchemaCompile(format!("Failed to compile project schema: {e}"))
-    })?;
+    let validator = jsonschema::validator_for(project_schema)
+        .map_err(|e| EidoError::SchemaCompile(format!("Failed to compile project schema: {e}")))?;
 
     for error in validator.iter_errors(&config_value) {
         errors.push(ValidationError {
@@ -204,6 +202,49 @@ pub fn validate_input_files(project: &Project, schema: &EidoSchema) -> Result<()
     }
 }
 
+/// Validate a single sample (as a JSON value) against the schema's sample schema.
+pub fn validate_single_sample(
+    sample: &Value,
+    schema: &EidoSchema,
+    sample_name: &str,
+) -> Result<()> {
+    let mut errors = Vec::new();
+
+    // Validate against imported schemas first
+    for import in &schema.imports {
+        if let Err(EidoError::Validation(import_errors)) =
+            validate_single_sample(sample, import, sample_name)
+        {
+            errors.extend(import_errors);
+        }
+    }
+
+    let Some(sample_schema) = &schema.sample_schema else {
+        return if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(EidoError::Validation(errors))
+        };
+    };
+
+    let validator = jsonschema::validator_for(sample_schema)
+        .map_err(|e| EidoError::SchemaCompile(format!("Failed to compile sample schema: {e}")))?;
+
+    for error in validator.iter_errors(sample) {
+        errors.push(ValidationError {
+            path: error.instance_path.to_string(),
+            message: error.to_string(),
+            sample_name: Some(sample_name.to_string()),
+        });
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(EidoError::Validation(errors))
+    }
+}
+
 /// Structural pre-check: compare DataFrame schema against JSON Schema using polars-jsonschema-bridge.
 fn structural_precheck(
     project: &Project,
@@ -243,7 +284,9 @@ fn structural_precheck(
                 if df_schema.get(col_name).is_none() {
                     errors.push(ValidationError {
                         path: format!("/properties/{col_name}"),
-                        message: format!("Required column '{col_name}' is missing from sample table"),
+                        message: format!(
+                            "Required column '{col_name}' is missing from sample table"
+                        ),
                         sample_name: None,
                     });
                 }

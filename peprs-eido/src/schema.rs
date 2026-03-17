@@ -139,11 +139,7 @@ fn extract_schemas(raw: &Value) -> (Option<Value>, Option<Value>) {
         if let Some(props) = proj.get_mut("properties") {
             if let Some(obj) = props.as_object_mut() {
                 obj.remove(SAMPLES_KEY);
-                if !obj.is_empty() {
-                    Some(proj)
-                } else {
-                    None
-                }
+                if !obj.is_empty() { Some(proj) } else { None }
             } else {
                 None
             }
@@ -330,7 +326,10 @@ mod tests {
             "tangible": ["read1", "genome_file"],
             "files": ["read1", "read2"]
         });
-        assert_eq!(extract_string_array(&raw, "tangible"), vec!["read1", "genome_file"]);
+        assert_eq!(
+            extract_string_array(&raw, "tangible"),
+            vec!["read1", "genome_file"]
+        );
         assert_eq!(extract_string_array(&raw, "files"), vec!["read1", "read2"]);
     }
 
