@@ -104,6 +104,45 @@ impl PyProject {
     }
 
     ///
+    /// Create a Project from a Pandas DataFrame.
+    ///
+    /// # Arguments
+    ///
+    /// * `df` - A Pandas DataFrame with sample data.
+    /// * `sample_table_index` - Optional column name for the sample index (default: `"sample_name"`).
+    ///
+    /// # Returns
+    ///
+    /// A new `PyProject`.
+    ///
+    #[classmethod]
+    #[pyo3(signature = (df, sample_table_index=None))]
+    pub fn from_pandas(
+        _cls: &Bound<'_, PyType>,
+        df: &Bound<'_, PyAny>,
+        sample_table_index: Option<String>,
+        py: Python<'_>,
+    ) -> Result<Self, PeprsCoreError> {
+        let pl = py
+            .import("polars")
+            .map_err(|e| peprs_core::error::Error::InvalidFormat(e.to_string()))?;
+        let polars_df: DataFrame = pl
+            .call_method1("from_pandas", (df,))
+            .map_err(|e| peprs_core::error::Error::InvalidFormat(e.to_string()))?
+            .extract::<PyDataFrame>()
+            .map_err(|e| peprs_core::error::Error::InvalidFormat(e.to_string()))?
+            .0;
+
+        let sample_table_index =
+            sample_table_index.unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX.to_string());
+        let inner = Project::from_dataframe(polars_df)
+            .with_sample_table_index(sample_table_index)
+            .build()?;
+
+        Ok(PyProject { inner })
+    }
+
+    ///
     /// Create a Project from a Python dict with `config`, `samples`, and optional `subsamples` keys.
     ///
     /// # Arguments

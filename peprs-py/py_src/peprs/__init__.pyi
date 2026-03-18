@@ -55,6 +55,19 @@ class Project:
         ...
 
     @classmethod
+    def from_pandas(
+        cls,
+        df: PandasDataFrame,
+        sample_table_index: Optional[str] = None,
+    ) -> "Project":
+        """Create a Project from a Pandas DataFrame.
+
+        :param df: a Pandas DataFrame with sample data
+        :param sample_table_index: column name for the sample index (default: "sample_name")
+        """
+        ...
+
+    @classmethod
     def from_dict(cls, pep_dictionary: Dict[str, Any]) -> "Project":
         """Create a Project from a Python dict.
 
