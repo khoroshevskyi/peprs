@@ -211,6 +211,31 @@ impl Api {
 
         Ok(bytes)
     }
+
+    /// Get full raw project from the specified pephub registry in JSON format.
+    ///
+    /// Returns a JSON string with `config`, `samples`, and optionally `subsamples` keys.
+    pub fn get_raw(&self, registry: &str) -> Result<String, ApiError> {
+        let endpoint = &self.endpoint;
+        let parts: Vec<&str> = registry.split(':').collect();
+        let tag = match parts.len() {
+            1 => "default",
+            2 => parts[1],
+            _ => return Err(ApiError::InvalidHeader("Invalid tag format")),
+        };
+        let namespace = parts[0];
+
+        let url = format!("{endpoint}/api/v1/projects/{namespace}?tag={tag}");
+        let body = self
+            .client
+            .get(&url)
+            .call()
+            .map_err(Box::new)?
+            .body_mut()
+            .read_to_string()
+            .map_err(Box::new)?;
+        Ok(body)
+    }
 }
 
 #[derive(Debug, Error)]
