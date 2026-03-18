@@ -10,6 +10,7 @@ tokio = "1.48.0"
 # peprs core code
 peprs-core = { path = "../peprs-core", features = ["wdl"] }
 peprs-eido = { path = "../peprs-eido" }
+serde_json.workspace = true
 
 
 [[bin]]

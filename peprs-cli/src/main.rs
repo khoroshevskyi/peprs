@@ -75,32 +75,91 @@ fn main() {
                 }
             }
         }
-        Commands::Validate { path, schema } => {
-            let proj = Project::from_config(path).build();
-            match proj {
-                Ok(proj) => match peprs_eido::validate(&proj, schema) {
-                    Ok(()) => {
-                        println!("Validation successful.");
-                    }
-                    Err(peprs_eido::error::EidoError::Validation(errors)) => {
-                        eprintln!("Validation failed with {} error(s):", errors.len());
-                        for err in &errors {
-                            eprintln!("  - {}", err);
-                        }
-                        std::process::exit(1);
-                    }
-                    Err(peprs_eido::error::EidoError::MissingFiles(missing)) => {
-                        eprintln!("Missing required files ({}):", missing.len());
-                        for m in &missing {
-                            eprintln!("  - {}", m);
-                        }
-                        std::process::exit(1);
-                    }
+        Commands::Validate {
+            path,
+            schema,
+            sample_name,
+            st_index,
+            sst_index,
+            amendments,
+        } => {
+            let mut builder = if path.ends_with(".csv") {
+                match Project::from_csv(path) {
+                    Ok(b) => b,
                     Err(err) => {
-                        eprintln!("Validation error: {}", err);
+                        eprintln!("Error parsing PEP: {}", err);
                         std::process::exit(1);
                     }
-                },
+                }
+            } else {
+                Project::from_config(path)
+            };
+            if let Some(st_index) = st_index {
+                builder = builder.with_sample_table_index(st_index.clone());
+            }
+            if let Some(sst_index) = sst_index {
+                builder = builder.with_subsample_table_index(&[sst_index.clone()]);
+            }
+            if let Some(amendments) = amendments {
+                builder = builder.with_amendments(amendments);
+            }
+            let proj = builder.build();
+            match proj {
+                Ok(proj) => {
+                    let result = if let Some(name) = sample_name {
+                        let eido_schema = match peprs_eido::load_schema(schema) {
+                            Ok(s) => s,
+                            Err(err) => {
+                                eprintln!("Error loading schema: {}", err);
+                                std::process::exit(1);
+                            }
+                        };
+                        let sample = match proj.get_sample(name) {
+                            Ok(Some(s)) => s,
+                            Ok(None) => {
+                                eprintln!("Sample '{}' not found in sample table", name);
+                                std::process::exit(1);
+                            }
+                            Err(err) => {
+                                eprintln!("Error retrieving sample: {}", err);
+                                std::process::exit(1);
+                            }
+                        };
+                        let json_map: serde_json::Map<String, serde_json::Value> = sample
+                            .iter()
+                            .map(|(k, v)| {
+                                (k.clone(), peprs_core::utils::any_value_to_json(v.clone()))
+                            })
+                            .collect();
+                        let sample_json = serde_json::Value::Object(json_map);
+                        peprs_eido::validate_single_sample(&sample_json, &eido_schema, name)
+                    } else {
+                        peprs_eido::validate(&proj, schema)
+                    };
+                    match result {
+                        Ok(()) => {
+                            println!("Validation successful.");
+                        }
+                        Err(peprs_eido::error::EidoError::Validation(errors)) => {
+                            eprintln!("Validation failed with {} error(s):", errors.len());
+                            for err in &errors {
+                                eprintln!("  - {}", err);
+                            }
+                            std::process::exit(1);
+                        }
+                        Err(peprs_eido::error::EidoError::MissingFiles(missing)) => {
+                            eprintln!("Missing required files ({}):", missing.len());
+                            for m in &missing {
+                                eprintln!("  - {}", m);
+                            }
+                            std::process::exit(1);
+                        }
+                        Err(err) => {
+                            eprintln!("Validation error: {}", err);
+                            std::process::exit(1);
+                        }
+                    }
+                }
                 Err(err) => {
                     eprintln!("Error parsing PEP: {}", err);
                     std::process::exit(1);

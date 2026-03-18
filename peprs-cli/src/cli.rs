@@ -45,6 +45,22 @@ pub enum Commands {
         /// Path to the eido schema file (YAML or JSON).
         #[arg(short = 's', long = "schema")]
         schema: String,
+
+        /// Name of the sample to validate. Only this sample will be validated.
+        #[arg(short = 'n', long = "sample-name")]
+        sample_name: Option<String>,
+
+        /// Sample table index to use (default: "sample_name")
+        #[arg(long = "st-index")]
+        st_index: Option<String>,
+
+        /// Subsample table index to use
+        #[arg(long = "sst-index")]
+        sst_index: Option<String>,
+
+        /// Names of the amendments to activate
+        #[arg(long = "amendments", num_args = 1..)]
+        amendments: Option<Vec<String>>,
     },
 
     /// Convert samples into an input format for pipeline

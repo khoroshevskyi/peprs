@@ -3237,6 +3237,7 @@ dependencies = [
  "clap",
  "peprs-core",
  "peprs-eido",
+ "serde_json",
  "tokio",
 ]
 
