@@ -10,8 +10,34 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Inspect { path, name } => {
-            let proj = Project::from_config(path).build();
+        Commands::Inspect {
+            path,
+            name,
+            st_index,
+            sst_index,
+            amendments,
+        } => {
+            let mut builder = if path.ends_with(".csv") {
+                match Project::from_csv(path) {
+                    Ok(b) => b,
+                    Err(err) => {
+                        eprintln!("Error parsing PEP: {}", err);
+                        return;
+                    }
+                }
+            } else {
+                Project::from_config(path)
+            };
+            if let Some(st_index) = st_index {
+                builder = builder.with_sample_table_index(st_index.clone());
+            }
+            if let Some(sst_index) = sst_index {
+                builder = builder.with_subsample_table_index(&[sst_index.clone()]);
+            }
+            if let Some(amendments) = amendments {
+                builder = builder.with_amendments(amendments);
+            }
+            let proj = builder.build();
             match proj {
                 Ok(proj) => {
                     if let Some(name) = name {

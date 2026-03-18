@@ -23,6 +23,18 @@ pub enum Commands {
         /// Optional name parameter
         #[arg(short = 'n', long = "sample-name")]
         name: Option<String>,
+
+        /// Sample table index to use (default: "sample_name")
+        #[arg(long = "st-index")]
+        st_index: Option<String>,
+
+        /// Subsample table index to use
+        #[arg(long = "sst-index")]
+        sst_index: Option<String>,
+
+        /// Names of the amendments to activate
+        #[arg(long = "amendments", num_args = 1..)]
+        amendments: Option<Vec<String>>,
     },
 
     /// Validate a project against an eido schema
