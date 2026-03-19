@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Type, Union, Sequence
 
 from peprs import Project
 
@@ -6,12 +6,14 @@ class EidoValidationError(Exception):
     """
     Raised when project or sample validation fails against an eido schema.
 
-    The ``errors_by_type`` attribute contains structured error details:
-    a dict with an "errors" key mapping to a list of dicts, each with
-    "path", "message", and "sample_name" keys.
+    The ``errors_by_type`` attribute groups errors by category.
+    Keys are category strings (``"type_mismatch"``, ``"missing_required"``,
+    ``"missing_column"``, ``"validation"``).  Values are lists of dicts with
+    ``"path"``, ``"message"``, and optionally ``"sample_names"`` (a list of
+    affected sample names).
     """
 
-    errors_by_type: Dict[str, List[Dict[str, str]]]
+    errors_by_type: Dict[str, List[Dict[str, Any]]]
 
 class PathAttrNotFoundError(Exception):
     """
@@ -31,6 +33,8 @@ def validate_project(
     :param project: the Project to validate
     :param schema: path to a schema file, or a pre-loaded schema dict
     :raises EidoValidationError: if validation fails
+    :raises PathAttrNotFoundError: if file is not found in provided path
+
     """
     ...
 
