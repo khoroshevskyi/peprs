@@ -1,0 +1,4 @@
+AntibodyID,ENSEMBLID,Gene_Name,Treatment,PlateID,Well
+CAB005042,ens123,EIF5A,Paclitaxel,3,C2
+CAB005042,ens124,EIF5A,Vorinostat,3,C2
+CAB005042,ens125,EIF5A,untreated,3,C2

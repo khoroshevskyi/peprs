@@ -1,0 +1,12 @@
+pep_version: "2.1.0"
+sample_table: samples.csv
+name: derived_sample_name_test
+description: "Test PEP where sample_name is derived, not in CSV"
+sample_modifiers:
+  append:
+    sample_name: key
+  derive:
+    attributes:
+    - sample_name
+    sources:
+      key: '{Gene_Name}_{Treatment}'
