@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Type, Union
 
 from peprs import Project
 
@@ -69,5 +69,22 @@ def validate_input_files(
     :param project: the Project to validate
     :param schema: path to a schema file, or a pre-loaded schema dict
     :raises PathAttrNotFoundError: if required files are missing
+    """
+    ...
+
+def schema_from_pydantic(
+    sample_model: Optional[Type[Any]] = None,
+    config_model: Optional[Type[Any]] = None,
+    *,
+    tangible: Optional[List[str]] = None,
+    files: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Build an eido-compatible schema dict from Pydantic model classes.
+
+    :param sample_model: Pydantic model class defining per-sample attributes.
+    :param config_model: Pydantic model class defining project-level config attributes.
+    :param tangible: sample attributes that must point to existing files.
+    :param files: sample attributes that may point to files (optional existence).
+    :return: dict passable to ``validate_project()``.
     """
     ...
