@@ -919,16 +919,6 @@ impl Project {
 
         let mut samples_lf = Some(samples_df_raw.clone().lazy());
 
-        // check if sample table has duplicated sample names
-        let sample_col = samples_df_raw.column(sample_table_index)?;
-        let has_duplicates = sample_col.n_unique()? < sample_col.len();
-        if has_duplicates {
-            warn!(
-                "Sample table contains duplicated samples, bugs can appear. \
-                      We strongly encourage using subsample tables!"
-            );
-        }
-
         // apply modifiers if they exist and if there is a sample table
         #[allow(clippy::collapsible_if)]
         if let Some(modifiers) = &config.sample_modifiers {
@@ -1026,6 +1016,27 @@ impl Project {
             Some(lf) => Some(lf.collect()?),
             None => None,
         };
+
+        // check sample_table_index column exists and for duplicates (after modifiers,
+        // since sample_table_index column may be created by append/derive)
+        if let Some(ref final_df) = samples {
+            if final_df.height() > 0 {
+                let sample_col = final_df.column(sample_table_index).map_err(|_| {
+                    Error::config(format!(
+                        "Sample table index column '{}' not found after applying modifiers. \
+                         Ensure the column exists in the sample table or is created by sample_modifiers.",
+                        sample_table_index
+                    ))
+                })?;
+                let has_duplicates = sample_col.n_unique()? < sample_col.len();
+                if has_duplicates {
+                    warn!(
+                        "Sample table contains duplicated samples, bugs can appear. \
+                         We strongly encourage using subsample tables!"
+                    );
+                }
+            }
+        }
 
         Ok(Self {
             sample_table_index: sample_table_index.to_owned(),
@@ -1362,11 +1373,36 @@ mod tests {
     #[case("../example-peps/example_imports/project_config.yaml")]
     #[case("../example-peps/example_amendments1/project_config.yaml")]
     #[case("../example-peps/example_derive_imply/project_config.yaml")]
+    #[case("../example-peps/example_derive_sample_name/project_config.yaml")]
     fn instantiate_pep(#[case] cfg_path: &'static str) {
         let proj = Project::from_config(cfg_path).build();
         let proj = proj.unwrap();
         println!("{:?}", proj.samples);
         // assert_eq!(proj.is_ok(), true);
+    }
+
+    #[rstest]
+    fn test_derive_sample_name() {
+        let proj = Project::from_config(
+            "../example-peps/example_derive_sample_name/project_config.yaml",
+        )
+        .build()
+        .unwrap();
+
+        let sample_names: Vec<String> = proj
+            .samples
+            .column("sample_name")
+            .unwrap()
+            .str()
+            .unwrap()
+            .into_no_null_iter()
+            .map(|s| s.to_string())
+            .collect();
+
+        assert_eq!(
+            sample_names,
+            vec!["EIF5A_Paclitaxel", "EIF5A_Vorinostat", "EIF5A_untreated"]
+        );
     }
 
     #[rstest]
