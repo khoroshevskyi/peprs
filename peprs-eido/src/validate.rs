@@ -56,7 +56,7 @@ pub fn validate_samples(project: &Project, schema: &EidoSchema) -> Result<()> {
         for error in validator.iter_errors(sample_value) {
             errors.push(ValidationError {
                 path: error.instance_path.to_string(),
-                message: error.to_string(),
+                message: format_schema_error(&error, sample_schema),
                 sample_name: Some(sample_name.clone()),
             });
         }
@@ -103,7 +103,7 @@ pub fn validate_project(project: &Project, schema: &EidoSchema) -> Result<()> {
     for error in validator.iter_errors(&config_value) {
         errors.push(ValidationError {
             path: error.instance_path.to_string(),
-            message: error.to_string(),
+            message: format_schema_error(&error, project_schema),
             sample_name: None,
         });
     }
@@ -233,7 +233,7 @@ pub fn validate_single_sample(
     for error in validator.iter_errors(sample) {
         errors.push(ValidationError {
             path: error.instance_path.to_string(),
-            message: error.to_string(),
+            message: format_schema_error(&error, sample_schema),
             sample_name: Some(sample_name.to_string()),
         });
     }
@@ -243,6 +243,76 @@ pub fn validate_single_sample(
     } else {
         Err(EidoError::Validation(errors))
     }
+}
+
+/// Format a jsonschema validation error with improved messages for `anyOf` failures.
+///
+/// When a value fails `anyOf` validation (common with Pydantic `Optional[T]` schemas),
+/// the default message is unhelpful ("is not valid under any of the schemas listed in the
+/// 'anyOf' keyword").  This function navigates the schema to extract the expected types
+/// and shows them alongside the actual type of the failing value.
+fn format_schema_error(error: &jsonschema::ValidationError, schema: &Value) -> String {
+    use jsonschema::error::ValidationErrorKind;
+
+    if !matches!(error.kind, ValidationErrorKind::AnyOf) {
+        return error.to_string();
+    }
+
+    // schema_path points to e.g. "/properties/protocol/anyOf" — navigate to the parent
+    // property node to find the anyOf array.
+    let schema_path = error.schema_path.to_string();
+    if let Some(any_of_node) = navigate_json_pointer(schema, &schema_path) {
+        if let Some(variants) = any_of_node.as_array() {
+            let expected: Vec<&str> = variants
+                .iter()
+                .filter_map(|v| v.get("type").and_then(|t| t.as_str()))
+                .collect();
+            if !expected.is_empty() {
+                let actual = json_type_name(&error.instance);
+                let field = error.instance_path.to_string();
+                let field_label = if field.is_empty() {
+                    String::new()
+                } else {
+                    format!(" at '{field}'")
+                };
+                return format!(
+                    "type mismatch{field_label}: got {actual}, expected {}",
+                    expected.join(" or ")
+                );
+            }
+        }
+    }
+
+    // Fallback to default message if we can't extract better info
+    error.to_string()
+}
+
+/// Return the JSON type name of a serde_json::Value.
+fn json_type_name(value: &Value) -> &'static str {
+    match value {
+        Value::Null => "null",
+        Value::Bool(_) => "boolean",
+        Value::Number(n) => {
+            if n.is_f64() && n.as_i64().is_none() {
+                "number"
+            } else {
+                "integer"
+            }
+        }
+        Value::String(_) => "string",
+        Value::Array(_) => "array",
+        Value::Object(_) => "object",
+    }
+}
+
+/// Navigate a JSON value by a JSON Pointer string (e.g. "/properties/protocol/anyOf").
+fn navigate_json_pointer<'a>(root: &'a Value, pointer: &str) -> Option<&'a Value> {
+    let segments: Vec<&str> = pointer.split('/').filter(|s| !s.is_empty()).collect();
+    let mut current = root;
+    for segment in &segments {
+        current = current.get(*segment)?;
+    }
+    Some(current)
 }
 
 /// Structural pre-check: compare DataFrame schema against JSON Schema using polars-jsonschema-bridge.
