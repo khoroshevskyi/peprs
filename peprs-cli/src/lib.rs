@@ -3,7 +3,38 @@ pub mod cli;
 use clap::Parser;
 use peprs_core::project::Project;
 
+use peprs_core::project::ProjectBuilder;
+
 use crate::cli::Commands;
+
+fn build_project(
+    path: &str,
+    st_index: &Option<String>,
+    sst_index: &Option<String>,
+    amendments: &Option<Vec<String>>,
+) -> ProjectBuilder {
+    let mut builder = if path.ends_with(".csv") {
+        match Project::from_csv(path) {
+            Ok(b) => b,
+            Err(err) => {
+                eprintln!("Error parsing PEP: {}", err);
+                std::process::exit(1);
+            }
+        }
+    } else {
+        Project::from_config(path)
+    };
+    if let Some(st_index) = st_index {
+        builder = builder.with_sample_table_index(st_index.clone());
+    }
+    if let Some(sst_index) = sst_index {
+        builder = builder.with_subsample_table_index(&[sst_index.clone()]);
+    }
+    if let Some(amendments) = amendments {
+        builder = builder.with_amendments(amendments);
+    }
+    builder
+}
 
 pub fn run() {
     let cli = crate::cli::Cli::parse();
@@ -24,27 +55,7 @@ fn run_cli(cli: crate::cli::Cli) {
             sst_index,
             amendments,
         } => {
-            let mut builder = if path.ends_with(".csv") {
-                match Project::from_csv(path) {
-                    Ok(b) => b,
-                    Err(err) => {
-                        eprintln!("Error parsing PEP: {}", err);
-                        return;
-                    }
-                }
-            } else {
-                Project::from_config(path)
-            };
-            if let Some(st_index) = st_index {
-                builder = builder.with_sample_table_index(st_index.clone());
-            }
-            if let Some(sst_index) = sst_index {
-                builder = builder.with_subsample_table_index(&[sst_index.clone()]);
-            }
-            if let Some(amendments) = amendments {
-                builder = builder.with_amendments(amendments);
-            }
-            let proj = builder.build();
+            let proj = build_project(path, st_index, sst_index, amendments).build();
             match proj {
                 Ok(proj) => {
                     if let Some(name) = name {
@@ -90,27 +101,7 @@ fn run_cli(cli: crate::cli::Cli) {
             sst_index,
             amendments,
         } => {
-            let mut builder = if path.ends_with(".csv") {
-                match Project::from_csv(path) {
-                    Ok(b) => b,
-                    Err(err) => {
-                        eprintln!("Error parsing PEP: {}", err);
-                        std::process::exit(1);
-                    }
-                }
-            } else {
-                Project::from_config(path)
-            };
-            if let Some(st_index) = st_index {
-                builder = builder.with_sample_table_index(st_index.clone());
-            }
-            if let Some(sst_index) = sst_index {
-                builder = builder.with_subsample_table_index(&[sst_index.clone()]);
-            }
-            if let Some(amendments) = amendments {
-                builder = builder.with_amendments(amendments);
-            }
-            let proj = builder.build();
+            let proj = build_project(path, st_index, sst_index, amendments).build();
             match proj {
                 Ok(proj) => {
                     let result = if let Some(name) = sample_name {
@@ -181,27 +172,7 @@ fn run_cli(cli: crate::cli::Cli) {
             sst_index,
             amendments,
         } => {
-            let mut builder = if path.ends_with(".csv") {
-                match Project::from_csv(path) {
-                    Ok(b) => b,
-                    Err(err) => {
-                        eprintln!("Error parsing PEP: {}", err);
-                        std::process::exit(1);
-                    }
-                }
-            } else {
-                Project::from_config(path)
-            };
-            if let Some(st_index) = st_index {
-                builder = builder.with_sample_table_index(st_index.clone());
-            }
-            if let Some(sst_index) = sst_index {
-                builder = builder.with_subsample_table_index(&[sst_index.clone()]);
-            }
-            if let Some(amendments) = amendments {
-                builder = builder.with_amendments(amendments);
-            }
-            match builder.build() {
+            match build_project(path, st_index, sst_index, amendments).build() {
                 Ok(mut proj) => {
                     if let Some(out) = output_path {
                         let result = match format {
