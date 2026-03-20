@@ -16,7 +16,6 @@ pub fn run_with_args(args: Vec<String>) {
 }
 
 fn run_cli(cli: crate::cli::Cli) {
-
     match &cli.command {
         Commands::Inspect {
             path,
