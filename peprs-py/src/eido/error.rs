@@ -60,10 +60,7 @@ struct GroupedEntry {
     sample_names: Vec<String>,
 }
 
-fn build_grouped_errors<'py>(
-    py: Python<'py>,
-    errors: &[ValidationError],
-) -> Bound<'py, PyDict> {
+fn build_grouped_errors<'py>(py: Python<'py>, errors: &[ValidationError]) -> Bound<'py, PyDict> {
     // category -> [(path, message)] -> sample_names
     let mut categories: BTreeMap<&str, Vec<GroupedEntry>> = BTreeMap::new();
 
@@ -113,10 +110,7 @@ fn format_grouped_summary(errors: &[ValidationError]) -> String {
     for error in errors {
         *counts.entry(classify_error(error)).or_default() += 1;
     }
-    let parts: Vec<String> = counts
-        .iter()
-        .map(|(cat, n)| format!("{n} {cat}"))
-        .collect();
+    let parts: Vec<String> = counts.iter().map(|(cat, n)| format!("{n} {cat}")).collect();
     format!("Validation failed: {}", parts.join(", "))
 }
 

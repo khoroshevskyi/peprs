@@ -6,8 +6,8 @@ use peprs_core::config::ProjectConfig;
 use peprs_core::consts::DEFAULT_SAMPLE_TABLE_INDEX;
 use peprs_core::project::Project;
 use polars::io::SerReader;
-use polars::prelude::*;
 use polars::prelude::JsonReader;
+use polars::prelude::*;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyType};
@@ -212,10 +212,7 @@ impl PyProject {
     ///
     #[classmethod]
     #[pyo3(signature = (registry))]
-    pub fn from_pephub(
-        _cls: &Bound<'_, PyType>,
-        registry: String,
-    ) -> Result<Self, PeprsCoreError> {
+    pub fn from_pephub(_cls: &Bound<'_, PyType>, registry: String) -> Result<Self, PeprsCoreError> {
         let pephub = Api::new().map_err(|e| {
             peprs_core::error::Error::Processing(format!("Failed to create PepHub client: {}", e))
         })?;

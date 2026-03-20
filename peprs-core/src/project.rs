@@ -1383,11 +1383,10 @@ mod tests {
 
     #[rstest]
     fn test_derive_sample_name() {
-        let proj = Project::from_config(
-            "../example-peps/example_derive_sample_name/project_config.yaml",
-        )
-        .build()
-        .unwrap();
+        let proj =
+            Project::from_config("../example-peps/example_derive_sample_name/project_config.yaml")
+                .build()
+                .unwrap();
 
         let sample_names: Vec<String> = proj
             .samples

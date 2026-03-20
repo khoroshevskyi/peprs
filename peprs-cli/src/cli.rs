@@ -9,9 +9,19 @@ pub struct Cli {
 
 #[derive(clap::ValueEnum, Clone)]
 pub enum ConvertFormat {
-    /// WDL (Workflow Description Language) format
-    Wdl,
+    /// YAML format
+    Yaml,
+    /// JSON format
+    Json,
+    /// CSV format
+    Csv,
 }
+
+// #[derive(clap::ValueEnum, Clone)]
+// pub enum WdlConvertFormat {
+//     /// WDL (Workflow Description Language) format
+//     Wdl,
+// }
 
 #[derive(Subcommand)]
 pub enum Commands {
@@ -63,32 +73,44 @@ pub enum Commands {
         amendments: Option<Vec<String>>,
     },
 
-    /// Convert samples into an input format for pipeline
+    /// Convert PEP project to a different format (yaml, json, csv)
     Convert {
         /// Path to the project configuration yaml file.
         path: String,
 
-        /// WDL workflow file for schema parsing
-        schema: String,
-
-        /// Format to convert to. Formats currently supported: ["wdl"]
-        #[arg(value_enum, short = 'f', long = "to")]
+        /// Output format: yaml, json, csv
+        #[arg(value_enum, short = 'f', long = "format")]
         format: ConvertFormat,
 
-        /// Task or workflow entrypoint in the WDL file
-        #[arg(short = 'n', long = "name")]
-        name: Option<String>,
+        /// Output file path. If not provided, prints to stdout (only if < 100 samples).
+        #[arg(short = 'p', long = "path")]
+        output_path: Option<String>,
 
-        /// Include nested inputs in the conversion
-        #[arg(long = "nested-inputs")]
-        nested_inputs: Option<bool>,
+        /// Sample table index to use (default: "sample_name")
+        #[arg(long = "st-index")]
+        st_index: Option<String>,
 
-        /// Show non-literal expressions in the output
-        #[arg(long = "show-non-literals")]
-        show_non_literals: Option<bool>,
+        /// Subsample table index to use
+        #[arg(long = "sst-index")]
+        sst_index: Option<String>,
 
-        /// Hide default values from the output
-        #[arg(long = "hide-defaults")]
-        hide_defaults: Option<bool>,
+        /// Names of the amendments to activate
+        #[arg(long = "amendments", num_args = 1..)]
+        amendments: Option<Vec<String>>,
     },
+    // /// Convert samples into WDL input format (deprecated)
+    // ConvertWdl {
+    //     path: String,
+    //     schema: String,
+    //     #[arg(value_enum, short = 'f', long = "to")]
+    //     format: WdlConvertFormat,
+    //     #[arg(short = 'n', long = "name")]
+    //     name: Option<String>,
+    //     #[arg(long = "nested-inputs")]
+    //     nested_inputs: Option<bool>,
+    //     #[arg(long = "show-non-literals")]
+    //     show_non_literals: Option<bool>,
+    //     #[arg(long = "hide-defaults")]
+    //     hide_defaults: Option<bool>,
+    // },
 }
