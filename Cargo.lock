@@ -3282,6 +3282,7 @@ name = "peprs-py"
 version = "0.1.0"
 dependencies = [
  "pephub-client",
+ "peprs-cli",
  "peprs-core",
  "peprs-eido",
  "polars",

@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 pyo3 = "0.25.0"
 peprs-core = { path = "../peprs-core", version = "0.1.0" }
 peprs-eido = { path = "../peprs-eido", version = "0.1.0" }
+peprs-cli = { path = "../peprs-cli" }
 pephub-client = { path = "../pephub-client", version = "0.1.0" }
 pyo3-polars = "0.24.0"
 pythonize = "0.25.0"
