@@ -171,48 +171,46 @@ fn run_cli(cli: crate::cli::Cli) {
             st_index,
             sst_index,
             amendments,
-        } => {
-            match build_project(path, st_index, sst_index, amendments).build() {
-                Ok(mut proj) => {
-                    if let Some(out) = output_path {
-                        let result = match format {
-                            cli::ConvertFormat::Yaml => proj.write_yaml(out),
-                            cli::ConvertFormat::Json => proj.write_json(out),
-                            cli::ConvertFormat::Csv => proj.write_csv(out),
-                        };
-                        if let Err(err) = result {
-                            eprintln!("Error writing output: {}", err);
-                            std::process::exit(1);
+        } => match build_project(path, st_index, sst_index, amendments).build() {
+            Ok(mut proj) => {
+                if let Some(out) = output_path {
+                    let result = match format {
+                        cli::ConvertFormat::Yaml => proj.write_yaml(out),
+                        cli::ConvertFormat::Json => proj.write_json(out),
+                        cli::ConvertFormat::Csv => proj.write_csv(out),
+                    };
+                    if let Err(err) = result {
+                        eprintln!("Error writing output: {}", err);
+                        std::process::exit(1);
+                    }
+                } else {
+                    if proj.len() >= 100 {
+                        eprintln!(
+                            "Project has {} samples. Use --path to write to a file for projects with 100+ samples.",
+                            proj.len()
+                        );
+                        std::process::exit(1);
+                    }
+                    let result = match format {
+                        cli::ConvertFormat::Yaml => proj.to_yaml_string(),
+                        cli::ConvertFormat::Json => {
+                            proj.to_json_string().map(|s| format!("{}\n", s))
                         }
-                    } else {
-                        if proj.len() >= 100 {
-                            eprintln!(
-                                "Project has {} samples. Use --path to write to a file for projects with 100+ samples.",
-                                proj.len()
-                            );
+                        cli::ConvertFormat::Csv => proj.to_csv_string(),
+                    };
+                    match result {
+                        Ok(output) => print!("{}", output),
+                        Err(err) => {
+                            eprintln!("Error converting: {}", err);
                             std::process::exit(1);
-                        }
-                        let result = match format {
-                            cli::ConvertFormat::Yaml => proj.to_yaml_string(),
-                            cli::ConvertFormat::Json => {
-                                proj.to_json_string().map(|s| format!("{}\n", s))
-                            }
-                            cli::ConvertFormat::Csv => proj.to_csv_string(),
-                        };
-                        match result {
-                            Ok(output) => print!("{}", output),
-                            Err(err) => {
-                                eprintln!("Error converting: {}", err);
-                                std::process::exit(1);
-                            }
                         }
                     }
                 }
-                Err(err) => {
-                    eprintln!("Error parsing PEP: {}", err);
-                    std::process::exit(1);
-                }
             }
-        }
+            Err(err) => {
+                eprintln!("Error parsing PEP: {}", err);
+                std::process::exit(1);
+            }
+        },
     }
 }
