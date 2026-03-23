@@ -64,10 +64,11 @@ print(len(project))  # number of samples
 
 # Get samples as a Polars DataFrame
 df_pl = project.to_polars()
-print(df)
+print(df_pl)
 
 # Get samples as a Pandas DataFrame
 df_pd = project.to_pandas()
+print(df_pd)
 
 # Look up a single sample by name
 sample = project.get_sample("3-1_11102016")
@@ -82,6 +83,6 @@ project.write_yaml("output.yaml")
 project.write_json("output.json")
 ```
 
-## 🚀 Afterwords
+## 🚀 Afterword
 
 We are looking forward to integrating this project with WDL, Snakemake, and Nextflow. All contributions are welcome. Please open an issue or submit a pull request.

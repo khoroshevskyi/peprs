@@ -236,7 +236,7 @@ impl PyProject {
         // 2. Samples
         let samples_obj = raw_value
             .get("sample_list")
-            .ok_or_else(|| peprs_core::error::Error::invalid_format("Missing 'samples' key"))?;
+            .ok_or_else(|| peprs_core::error::Error::invalid_format("Missing 'sample_list' key"))?;
         let samples_bytes = samples_obj.to_string();
         let samples_df = JsonReader::new(Cursor::new(samples_bytes.as_bytes()))
             .finish()

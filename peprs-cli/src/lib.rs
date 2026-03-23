@@ -72,7 +72,7 @@ fn run_cli(cli: crate::cli::Cli) {
                             }
                             Err(error) => {
                                 eprintln!(
-                                    "There was an unexpected error retreiving the sample: {}",
+                                    "There was an unexpected error retrieving the sample: {}",
                                     error
                                 );
                             }

@@ -142,26 +142,27 @@ pub fn validate_input_files(project: &Project, schema: &EidoSchema) -> Result<()
                 continue;
             };
 
-            let path_str = any_value_to_json(value.clone());
-            let Some(path_str) = path_str.as_str() else {
-                continue;
+            let json_val = any_value_to_json(value.clone());
+            let paths: Vec<&str> = match &json_val {
+                Value::String(s) => vec![s.as_str()],
+                Value::Array(arr) => arr.iter().filter_map(|v| v.as_str()).collect(),
+                _ => continue,
             };
 
-            if path_str.is_empty() || path_str == "null" {
-                missing.push(MissingFile {
-                    sample_name: sample_name.clone(),
-                    attribute: attr.clone(),
-                    path: "<empty>".to_string(),
-                });
-                continue;
-            }
-
-            if !Path::new(path_str).exists() {
-                missing.push(MissingFile {
-                    sample_name: sample_name.clone(),
-                    attribute: attr.clone(),
-                    path: path_str.to_string(),
-                });
+            for p in paths {
+                if p.is_empty() || p == "null" {
+                    missing.push(MissingFile {
+                        sample_name: sample_name.clone(),
+                        attribute: attr.clone(),
+                        path: "<empty>".to_string(),
+                    });
+                } else if !Path::new(p).exists() {
+                    missing.push(MissingFile {
+                        sample_name: sample_name.clone(),
+                        attribute: attr.clone(),
+                        path: p.to_string(),
+                    });
+                }
             }
         }
     }
@@ -180,8 +181,13 @@ pub fn validate_input_files(project: &Project, schema: &EidoSchema) -> Result<()
                 continue;
             }
             if let Some(value) = sample.get(attr) {
-                let path_str = any_value_to_json(value.clone());
-                if let Some(p) = path_str.as_str() {
+                let json_val = any_value_to_json(value.clone());
+                let paths: Vec<&str> = match &json_val {
+                    Value::String(s) => vec![s.as_str()],
+                    Value::Array(arr) => arr.iter().filter_map(|v| v.as_str()).collect(),
+                    _ => continue,
+                };
+                for p in paths {
                     if !p.is_empty() && p != "null" && !Path::new(p).exists() {
                         warn!(
                             sample = sample_name,
@@ -422,6 +428,16 @@ fn dtype_str_compatible(actual: &polars::prelude::DataType, expected_str: &str) 
     // String is always compatible (CSV data is often all strings)
     if matches!(actual, DataType::String) || expected_str == "String" {
         return true;
+    }
+
+    // List types: Polars Debug prints List(T) but the bridge returns List[T]
+    if let DataType::List(inner) = actual {
+        if let Some(inner_expected) = expected_str
+            .strip_prefix("List[")
+            .and_then(|s| s.strip_suffix(']'))
+        {
+            return dtype_str_compatible(inner, inner_expected);
+        }
     }
 
     let is_actual_int = matches!(

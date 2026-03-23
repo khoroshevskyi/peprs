@@ -20,6 +20,9 @@ pub fn any_value_to_json(any_value: AnyValue) -> Value {
         AnyValue::UInt16(u) => Value::from(u),
         AnyValue::UInt32(u) => Value::from(u),
         AnyValue::UInt64(u) => Value::from(u),
+        AnyValue::List(series) => {
+            Value::Array(series.iter().map(|v| any_value_to_json(v)).collect())
+        }
         av => Value::String(av.to_string()),
     }
 }
