@@ -1,0 +1,20 @@
+[package]
+name = "peprs-eido"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+peprs-core = { path = "../peprs-core" }
+polars = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+polars-jsonschema-bridge = "0.7.0"
+jsonschema = "0.29"
+
+[dev-dependencies]
+pretty_assertions = "1.4.1"
+rstest = "0.26.1"

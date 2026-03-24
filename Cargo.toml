@@ -3,6 +3,15 @@ resolver = "3"
 edition = "2024"
 members = [
     "peprs-core",
+    "peprs-eido",
     "peprs-py",
     "peprs-cli", "pephub-client",
 ]
+[workspace.dependencies]
+polars = { version = "0.51.0", features = ["lazy", "is_in", "replace", "strings", "concat_str", "json", "cloud"]}
+serde = { version = "1.0.226", features = ["derive"] }
+serde_yaml = "0.9.34"
+serde_json = "1.0.145"
+thiserror = "2.0.16"
+tracing = "0.1.44"
+

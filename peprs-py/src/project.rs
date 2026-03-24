@@ -6,8 +6,8 @@ use peprs_core::config::ProjectConfig;
 use peprs_core::consts::DEFAULT_SAMPLE_TABLE_INDEX;
 use peprs_core::project::Project;
 use polars::io::SerReader;
+use polars::prelude::JsonReader;
 use polars::prelude::*;
-use polars::prelude::{CsvReader, LazyFrame};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyType};
@@ -104,6 +104,45 @@ impl PyProject {
     }
 
     ///
+    /// Create a Project from a Pandas DataFrame.
+    ///
+    /// # Arguments
+    ///
+    /// * `df` - A Pandas DataFrame with sample data.
+    /// * `sample_table_index` - Optional column name for the sample index (default: `"sample_name"`).
+    ///
+    /// # Returns
+    ///
+    /// A new `PyProject`.
+    ///
+    #[classmethod]
+    #[pyo3(signature = (df, sample_table_index=None))]
+    pub fn from_pandas(
+        _cls: &Bound<'_, PyType>,
+        df: &Bound<'_, PyAny>,
+        sample_table_index: Option<String>,
+        py: Python<'_>,
+    ) -> Result<Self, PeprsCoreError> {
+        let pl = py
+            .import("polars")
+            .map_err(|e| peprs_core::error::Error::InvalidFormat(e.to_string()))?;
+        let polars_df: DataFrame = pl
+            .call_method1("from_pandas", (df,))
+            .map_err(|e| peprs_core::error::Error::InvalidFormat(e.to_string()))?
+            .extract::<PyDataFrame>()
+            .map_err(|e| peprs_core::error::Error::InvalidFormat(e.to_string()))?
+            .0;
+
+        let sample_table_index =
+            sample_table_index.unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX.to_string());
+        let inner = Project::from_dataframe(polars_df)
+            .with_sample_table_index(sample_table_index)
+            .build()?;
+
+        Ok(PyProject { inner })
+    }
+
+    ///
     /// Create a Project from a Python dict with `config`, `samples`, and optional `subsamples` keys.
     ///
     /// # Arguments
@@ -174,28 +213,59 @@ impl PyProject {
     #[classmethod]
     #[pyo3(signature = (registry))]
     pub fn from_pephub(_cls: &Bound<'_, PyType>, registry: String) -> Result<Self, PeprsCoreError> {
-        let pephub = Api::new().unwrap();
-        let cfg = pephub.get_config(&registry).unwrap();
-        let samples_csv_bytes = pephub.get_samples(&registry).unwrap();
+        let pephub = Api::new().map_err(|e| {
+            peprs_core::error::Error::Processing(format!("Failed to create PepHub client: {}", e))
+        })?;
 
-        let csv_reader_options = CsvReadOptions::default()
-            .with_has_header(true)
-            .with_infer_schema_length(Some(1000));
+        // Fetch the full project JSON (config + samples + subsamples)
+        let raw = pephub.get_raw(registry.as_str()).map_err(|e| {
+            peprs_core::error::Error::Processing(format!("Failed to fetch from PepHub: {}", e))
+        })?;
 
-        let cursor = Cursor::new(samples_csv_bytes);
-        let df = CsvReader::new(cursor)
-            .with_options(csv_reader_options)
-            .finish();
+        let raw_value: Value =
+            serde_json::from_str(&raw).map_err(peprs_core::error::Error::Json)?;
 
-        match df {
-            Ok(df) => {
-                let inner = Project::from_memory(cfg, df, None).build()?;
-                Ok(PyProject { inner })
+        // 1. Config
+        let config_value = raw_value
+            .get("config")
+            .ok_or_else(|| peprs_core::error::Error::invalid_format("Missing 'config' key"))?;
+        let mut config: ProjectConfig =
+            serde_json::from_value(config_value.clone()).map_err(peprs_core::error::Error::Json)?;
+        config.raw = Some(config_value.clone());
+
+        // 2. Samples
+        let samples_obj = raw_value
+            .get("sample_list")
+            .ok_or_else(|| peprs_core::error::Error::invalid_format("Missing 'sample_list' key"))?;
+        let samples_bytes = samples_obj.to_string();
+        let samples_df = JsonReader::new(Cursor::new(samples_bytes.as_bytes()))
+            .finish()
+            .map_err(peprs_core::error::Error::Polars)?;
+
+        // 3. Subsamples
+        let subsamples = match raw_value.get("subsample_list") {
+            Some(Value::Array(subs_list)) => {
+                let mut dfs = Vec::new();
+                for sub_item in subs_list {
+                    let sub_bytes = sub_item.to_string();
+                    let sub_df = JsonReader::new(Cursor::new(sub_bytes.as_bytes()))
+                        .finish()
+                        .map_err(peprs_core::error::Error::Polars)?;
+                    dfs.push(sub_df);
+                }
+                Some(dfs)
             }
-            Err(err) => Err(PeprsCoreError::from(
-                peprs_core::error::Error::InvalidFormat(format!("Error reading CSV: {}", err)),
-            )),
-        }
+            Some(Value::Null) | None => None,
+            _ => {
+                return Err(
+                    peprs_core::error::Error::invalid_format("Invalid 'subsamples' format").into(),
+                )
+            }
+        };
+
+        // Build the project
+        let inner = Project::from_memory(config, samples_df, subsamples).build()?;
+        Ok(PyProject { inner })
     }
 
     ///

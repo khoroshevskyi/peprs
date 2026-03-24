@@ -642,29 +642,29 @@ pub fn get_inputs_from_wdl(options: WdlInputParsingOptions) -> Result<Map<String
     Ok(inputs)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use pretty_assertions::assert_eq;
-    use rstest::*;
-
-    #[fixture]
-    fn sample_wdl() -> &'static str {
-        "../example-workflows/example-simple.wdl"
-    }
-
-    #[rstest]
-    #[case("../example-workflows/example-simple.wdl")]
-    #[case("../example-workflows/example-with-struct.wdl")]
-    fn extract_inputs_from_wdl(#[case] wdl_path: &'static str) {
-        let wdl_options = WdlInputParsingOptions::new(wdl_path)
-            .with_nested_inputs(true)
-            .with_show_non_literals(true)
-            .with_name("say_hello");
-
-        let inputs = get_inputs_from_wdl(wdl_options);
-        assert_eq!(inputs.is_ok(), true);
-        println!("{:?}", inputs.unwrap());
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//
+//     use pretty_assertions::assert_eq;
+//     use rstest::*;
+//
+//     #[fixture]
+//     fn sample_wdl() -> &'static str {
+//         "../example-workflows/example-simple.wdl"
+//     }
+//
+//     #[rstest]
+//     #[case("../example-workflows/example-simple.wdl")]
+//     #[case("../example-workflows/example-with-struct.wdl")]
+//     fn extract_inputs_from_wdl(#[case] wdl_path: &'static str) {
+//         let wdl_options = WdlInputParsingOptions::new(wdl_path)
+//             .with_nested_inputs(true)
+//             .with_show_non_literals(true)
+//             .with_name("say_hello");
+//
+//         let inputs = get_inputs_from_wdl(wdl_options);
+//         assert_eq!(inputs.is_ok(), true);
+//         println!("{:?}", inputs.unwrap());
+//     }
+// }

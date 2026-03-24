@@ -21,26 +21,6 @@ use crate::wdl::get_inputs_from_wdl;
 #[cfg(feature = "wdl")]
 use serde_json::Value;
 
-#[cfg(feature = "wdl")]
-fn any_value_to_json(any_value: AnyValue) -> Value {
-    match any_value {
-        AnyValue::Null => Value::Null,
-        AnyValue::Boolean(b) => Value::Bool(b),
-        AnyValue::String(s) => Value::String(s.to_string()),
-        AnyValue::Float32(f) => Value::from(f),
-        AnyValue::Float64(f) => Value::from(f),
-        AnyValue::Int8(i) => Value::from(i),
-        AnyValue::Int16(i) => Value::from(i),
-        AnyValue::Int32(i) => Value::from(i),
-        AnyValue::Int64(i) => Value::from(i),
-        AnyValue::UInt8(u) => Value::from(u),
-        AnyValue::UInt16(u) => Value::from(u),
-        AnyValue::UInt32(u) => Value::from(u),
-        AnyValue::UInt64(u) => Value::from(u),
-        av => Value::String(av.to_string()),
-    }
-}
-
 // Define the possible sources for a project
 #[allow(clippy::large_enum_variant)]
 enum ProjectSource {
@@ -939,16 +919,6 @@ impl Project {
 
         let mut samples_lf = Some(samples_df_raw.clone().lazy());
 
-        // check if sample table has duplicated sample names
-        let sample_col = samples_df_raw.column(sample_table_index)?;
-        let has_duplicates = sample_col.n_unique()? < sample_col.len();
-        if has_duplicates {
-            warn!(
-                "Sample table contains duplicated samples, bugs can appear. \
-                      We strongly encourage using subsample tables!"
-            );
-        }
-
         // apply modifiers if they exist and if there is a sample table
         #[allow(clippy::collapsible_if)]
         if let Some(modifiers) = &config.sample_modifiers {
@@ -1046,6 +1016,27 @@ impl Project {
             Some(lf) => Some(lf.collect()?),
             None => None,
         };
+
+        // check sample_table_index column exists and for duplicates (after modifiers,
+        // since sample_table_index column may be created by append/derive)
+        if let Some(ref final_df) = samples {
+            if final_df.height() > 0 {
+                let sample_col = final_df.column(sample_table_index).map_err(|_| {
+                    Error::config(format!(
+                        "Sample table index column '{}' not found after applying modifiers. \
+                         Ensure the column exists in the sample table or is created by sample_modifiers.",
+                        sample_table_index
+                    ))
+                })?;
+                let has_duplicates = sample_col.n_unique()? < sample_col.len();
+                if has_duplicates {
+                    warn!(
+                        "Sample table contains duplicated samples, bugs can appear. \
+                         We strongly encourage using subsample tables!"
+                    );
+                }
+            }
+        }
 
         Ok(Self {
             sample_table_index: sample_table_index.to_owned(),
@@ -1292,7 +1283,7 @@ impl Project {
 
                 // If the PEP has this column, get the value and add it to the JSON
                 if let Some(any_value) = sample.get(wdl_input_name) {
-                    let json_value = any_value_to_json(any_value.clone());
+                    let json_value = crate::utils::any_value_to_json(any_value.clone());
                     sample_map.insert(wdl_input_name.to_string(), json_value);
                 }
             }
@@ -1382,11 +1373,35 @@ mod tests {
     #[case("../example-peps/example_imports/project_config.yaml")]
     #[case("../example-peps/example_amendments1/project_config.yaml")]
     #[case("../example-peps/example_derive_imply/project_config.yaml")]
+    #[case("../example-peps/example_derive_sample_name/project_config.yaml")]
     fn instantiate_pep(#[case] cfg_path: &'static str) {
         let proj = Project::from_config(cfg_path).build();
         let proj = proj.unwrap();
         println!("{:?}", proj.samples);
         // assert_eq!(proj.is_ok(), true);
+    }
+
+    #[rstest]
+    fn test_derive_sample_name() {
+        let proj =
+            Project::from_config("../example-peps/example_derive_sample_name/project_config.yaml")
+                .build()
+                .unwrap();
+
+        let sample_names: Vec<String> = proj
+            .samples
+            .column("sample_name")
+            .unwrap()
+            .str()
+            .unwrap()
+            .into_no_null_iter()
+            .map(|s| s.to_string())
+            .collect();
+
+        assert_eq!(
+            sample_names,
+            vec!["EIF5A_Paclitaxel", "EIF5A_Vorinostat", "EIF5A_untreated"]
+        );
     }
 
     #[rstest]
