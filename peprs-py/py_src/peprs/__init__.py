@@ -6,8 +6,10 @@ from .peprs import *  # noqa: F403
 import sys as _sys
 
 from peprs._pydantic import schema_from_pydantic as _schema_from_pydantic
+from peprs._pydantic import validate_with_pydantic as _validate_with_pydantic
 
 _eido_mod = _sys.modules.get("peprs.eido")
 if _eido_mod is not None:
     _eido_mod.schema_from_pydantic = _schema_from_pydantic
-del _schema_from_pydantic, _eido_mod, _sys
+    _eido_mod.validate_with_pydantic = _validate_with_pydantic
+del _schema_from_pydantic, _validate_with_pydantic, _eido_mod, _sys

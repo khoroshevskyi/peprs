@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Type
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Type
+
+if TYPE_CHECKING:
+    from peprs import Project
 
 
 def schema_from_pydantic(
@@ -45,6 +48,35 @@ def schema_from_pydantic(
         schema["files"] = files
 
     return schema
+
+
+def validate_with_pydantic(
+    project: Project,
+    sample_model: Optional[Type[Any]] = None,
+    config_model: Optional[Type[Any]] = None,
+    *,
+    tangible: Optional[List[str]] = None,
+    files: Optional[List[str]] = None,
+) -> None:
+    """Validate a PEP project using Pydantic model classes.
+
+    Convenience wrapper that converts models to a schema dict via
+    ``schema_from_pydantic`` and then calls ``validate_project``.
+
+    :param project: the Project to validate.
+    :param sample_model: Pydantic model class defining per-sample attributes.
+    :param config_model: Pydantic model class defining project-level config attributes.
+    :param tangible: sample attributes that must point to existing files.
+    :param files: sample attributes that may point to files (optional existence).
+    :raises EidoValidationError: if validation fails.
+    :raises PathAttrNotFoundError: if required files are missing.
+    """
+    from peprs.eido import validate_project
+
+    schema = schema_from_pydantic(
+        sample_model, config_model, tangible=tangible, files=files
+    )
+    validate_project(project, schema)
 
 
 def _get_json_schema(model: Type[Any]) -> Dict[str, Any]:
