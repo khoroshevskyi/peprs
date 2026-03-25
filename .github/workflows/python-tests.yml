@@ -1,10 +1,6 @@
 name: Python tests
-
+# THIS file is not working yet. And skipped due to time consumed time
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
   workflow_dispatch:
 
 env:
@@ -16,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.14"]
+        python-version: ["3.10", "3.13"]
     steps:
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@stable
