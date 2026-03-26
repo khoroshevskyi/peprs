@@ -38,10 +38,7 @@ impl PySample {
             .get(name)
             .map(|v| v.clone_ref(py))
             .ok_or_else(|| {
-                PyAttributeError::new_err(format!(
-                    "'Sample' object has no attribute '{}'",
-                    name
-                ))
+                PyAttributeError::new_err(format!("'Sample' object has no attribute '{}'", name))
             })
     }
 
