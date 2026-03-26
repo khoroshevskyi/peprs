@@ -30,6 +30,16 @@ We are starting with the core PEP specification for metadata management and will
 pip install peprs
 ```
 
+### Python (from source)
+
+To build and install the Python package from source (requires [maturin](https://www.maturin.rs/) and Rust toolchain):
+
+```bash
+git clone https://github.com/pepkit/peprs.git
+cd peprs/peprs-py
+maturin develop
+```
+
 ### Rust
 
 Add to your `Cargo.toml`:
@@ -39,14 +49,16 @@ Add to your `Cargo.toml`:
 peprs-core = { git = "https://github.com/pepkit/peprs" }
 ```
 
-### CLI (from source)
+### CLI
+
+#### Using source
 
 ```bash
 cargo install --path peprs-cli
 ```
 
-Or from Python:
-```
+#### Using Python
+```bash
 pip install peprs
 ```
 
