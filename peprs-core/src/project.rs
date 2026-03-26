@@ -56,6 +56,12 @@ pub struct Project {
     pub subsample_table_index: Option<Vec<String>>,
 }
 
+impl PartialEq for Project {
+    fn eq(&self, other: &Self) -> bool {
+        self.samples.equals_missing(&other.samples)
+    }
+}
+
 impl ProjectBuilder {
     ///
     /// Specify a list of amendments to activate when building the project.
