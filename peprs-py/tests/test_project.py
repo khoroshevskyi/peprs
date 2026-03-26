@@ -106,6 +106,7 @@ class TestSampleAccess:
         result = p.get_sample(name)
         assert isinstance(result, Sample)
         assert result["sample_name"] == name
+        assert result.sample_name == name
 
     @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
     def test_get_sample_nonexistent(self, example_pep_cfg_path):
