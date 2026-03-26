@@ -12,7 +12,7 @@ from .conftest import EXAMPLE_TYPES, get_example_pep_path
 class TestProjectConstructor:
     def test_nonexistent(self):
         """Verify that an error is raised for a nonexistent config file."""
-        with pytest.raises(Exception):
+        with pytest.raises(OSError):
             Project("nonexistentfile.yaml")
 
     @pytest.mark.parametrize("example_pep_cfg_path", EXAMPLE_TYPES, indirect=True)
@@ -38,7 +38,7 @@ class TestProjectConstructor:
     @pytest.mark.parametrize("example_pep_cfg_path", ["amendments1"], indirect=True)
     def test_missing_amendment_raises(self, example_pep_cfg_path):
         """Verify that an invalid amendment name raises an error."""
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             Project(example_pep_cfg_path, amendments=["nonexistent"])
 
     @pytest.mark.parametrize("example_pep_cfg_path", EXAMPLE_TYPES, indirect=True)
