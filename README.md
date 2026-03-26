@@ -86,6 +86,19 @@ project.write_yaml("output.yaml")
 project.write_json("output.json")
 ```
 
+## Benchmarks
+
+Comparison of **peppy** (pure Python) vs **peprs** (Rust bindings). Averaged over 3 runs per sample size.
+
+### Initialization Time (seconds)
+
+| Library | 5 | 20 | 100 | 500 | 1,000 | 5,000 | 10,000 | 50,000 | 100,000 |
+|---------|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| peppy | 0.019 | 0.026 | 0.096 | 0.428 | 0.851 | 4.226 | 8.700 | 44.017 | 87.613 |
+| peprs | 0.003 | 0.002 | 0.002 | 0.003 | 0.004 | 0.014 | 0.036 | 0.043 | 0.068 |
+| **speedup** | **7x** | **15x** | **50x** | **149x** | **196x** | **306x** | **244x** | **1,021x** | **1,288x** |
+
+
 ## 🚀 Afterword
 
 We are looking forward to integrating this project with WDL, Snakemake, and Nextflow. All contributions are welcome. Please open an issue or submit a pull request.
