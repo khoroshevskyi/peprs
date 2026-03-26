@@ -616,7 +616,8 @@ impl PyProject {
     }
 
     ///
-    /// Returns a string representation of the project's samples DataFrame.
+    /// Returns a boolean value if project sample table is the same.
+    /// This function DOES NOT check if configs are the same
     ///
     fn __eq__(&self, other: &Self) -> bool {
         self.inner == other.inner

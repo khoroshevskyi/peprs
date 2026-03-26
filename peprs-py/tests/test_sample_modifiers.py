@@ -50,6 +50,6 @@ class TestSampleModifiers:
         p = Project(example_pep_cfg_path)
         samples = list(p.samples)
         multi_samples = [
-            s for s in samples if s["sample_name"] in ("frog_1", "frog2")
+            s for s in samples if s["sample_name"] in ("frog_1", "frog_2")
         ]
         assert all(isinstance(s["file"], list) for s in multi_samples)

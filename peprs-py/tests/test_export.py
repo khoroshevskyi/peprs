@@ -86,6 +86,12 @@ class TestToString:
         assert isinstance(s, str)
         parsed = yaml.safe_load(s)
         assert parsed is not None
+        # Ensure the YAML represents a list of samples that include sample_name
+        assert isinstance(parsed, list)
+        assert any(
+            isinstance(sample, dict) and "sample_name" in sample
+            for sample in parsed
+        )
 
     @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
     def test_to_json_string(self, example_pep_cfg_path):
