@@ -7,6 +7,7 @@ pub mod utils;
 use pyo3::prelude::*;
 
 use project::PyProject;
+use samples::PySample;
 
 /// CLI entry point callable from Python.
 #[pyfunction]
@@ -24,6 +25,7 @@ fn _cli_main(py: Python<'_>) {
 #[pymodule]
 fn peprs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyProject>()?;
+    m.add_class::<PySample>()?;
     m.add_function(wrap_pyfunction!(_cli_main, m)?)?;
     eido::register_eido_module(m)?;
     Ok(())

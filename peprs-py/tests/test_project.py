@@ -4,7 +4,7 @@ import pandas as pd
 import polars as pl
 import pytest
 
-from peprs import Project
+from peprs import Project, Sample
 
 from .conftest import EXAMPLE_TYPES, get_example_pep_path
 
@@ -104,7 +104,7 @@ class TestSampleAccess:
         first = list(p.samples)[0]
         name = first["sample_name"]
         result = p.get_sample(name)
-        assert isinstance(result, dict)
+        assert isinstance(result, Sample)
         assert result["sample_name"] == name
 
     @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
@@ -121,7 +121,7 @@ class TestSampleAccess:
         samples = list(p.samples)
         assert len(samples) == len(p)
         for s in samples:
-            assert isinstance(s, dict)
+            assert isinstance(s, Sample)
             assert "sample_name" in s
 
     @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
@@ -130,8 +130,8 @@ class TestSampleAccess:
         p = Project(example_pep_cfg_path)
         first = p.samples[0]
         last = p.samples[-1]
-        assert isinstance(first, dict)
-        assert isinstance(last, dict)
+        assert isinstance(first, Sample)
+        assert isinstance(last, Sample)
         assert "sample_name" in first
 
     @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
@@ -149,6 +149,94 @@ class TestSampleAccess:
         # At least one sample should have a list-type 'file' from subsample merging
         has_list = any(isinstance(s.get("file"), list) for s in samples)
         assert has_list
+
+
+class TestPySample:
+    @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
+    def test_attribute_access(self, example_pep_cfg_path):
+        """Verify sample.key works the same as sample['key']."""
+        p = Project(example_pep_cfg_path)
+        s = p.samples[0]
+        assert s.sample_name == s["sample_name"]
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
+    def test_contains(self, example_pep_cfg_path):
+        """Verify 'key in sample' works."""
+        p = Project(example_pep_cfg_path)
+        s = p.samples[0]
+        assert "sample_name" in s
+        assert "nonexistent_key" not in s
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
+    def test_keys(self, example_pep_cfg_path):
+        """Verify keys() returns column names."""
+        p = Project(example_pep_cfg_path)
+        s = p.samples[0]
+        assert "sample_name" in s.keys()
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
+    def test_get_default(self, example_pep_cfg_path):
+        """Verify get() with default value."""
+        p = Project(example_pep_cfg_path)
+        s = p.samples[0]
+        assert s.get("nonexistent", "default") == "default"
+        assert s.get("nonexistent") is None
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
+    def test_to_dict(self, example_pep_cfg_path):
+        """Verify to_dict() returns a plain dict."""
+        p = Project(example_pep_cfg_path)
+        s = p.samples[0]
+        d = s.to_dict()
+        assert isinstance(d, dict)
+        assert d["sample_name"] == s["sample_name"]
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
+    def test_missing_attr_raises(self, example_pep_cfg_path):
+        """Verify AttributeError on missing attribute."""
+        p = Project(example_pep_cfg_path)
+        s = p.samples[0]
+        with pytest.raises(AttributeError):
+            _ = s.nonexistent_attr
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
+    def test_missing_key_raises(self, example_pep_cfg_path):
+        """Verify KeyError on missing key."""
+        p = Project(example_pep_cfg_path)
+        s = p.samples[0]
+        with pytest.raises(KeyError):
+            _ = s["nonexistent_key"]
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
+    def test_len(self, example_pep_cfg_path):
+        """Verify len(sample) returns number of fields."""
+        p = Project(example_pep_cfg_path)
+        s = p.samples[0]
+        assert len(s) > 0
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
+    def test_repr(self, example_pep_cfg_path):
+        """Verify repr includes 'Sample('."""
+        p = Project(example_pep_cfg_path)
+        s = p.samples[0]
+        assert "Sample(" in repr(s)
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
+    def test_items(self, example_pep_cfg_path):
+        """Verify items() returns key-value pairs."""
+        p = Project(example_pep_cfg_path)
+        s = p.samples[0]
+        items = s.items()
+        assert len(items) == len(s)
+        keys = [k for k, v in items]
+        assert "sample_name" in keys
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
+    def test_values(self, example_pep_cfg_path):
+        """Verify values() returns the right count."""
+        p = Project(example_pep_cfg_path)
+        s = p.samples[0]
+        assert len(s.values()) == len(s)
 
 
 class TestAlternativeConstructors:
