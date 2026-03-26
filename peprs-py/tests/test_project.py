@@ -273,3 +273,19 @@ class TestAlternativeConstructors:
         assert "subsamples" in d
         p2 = Project.from_dict(d)
         assert len(p2) == len(p1)
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["subtable1"], indirect=True)
+    def test_equals(self, example_pep_cfg_path):
+        """Verify if equals works"""
+        p1 = Project(example_pep_cfg_path)
+        p2 = Project(example_pep_cfg_path)
+        assert p1 == p2
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["subtable1"], indirect=True)
+    def test_not_equals(self, example_pep_cfg_path):
+        """Verify if equals works"""
+        p1 = Project(example_pep_cfg_path)
+        csv_path = os.path.join(os.path.dirname(example_pep_cfg_path), "sample_table.csv")
+        p2 = Project(csv_path)
+        assert p1 != p2
+        assert (p1 == p2) == False
