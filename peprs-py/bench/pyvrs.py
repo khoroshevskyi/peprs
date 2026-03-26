@@ -3,9 +3,8 @@
 import argparse
 import csv
 import gc
-import sys
+import os
 import time
-import tracemalloc
 from pathlib import Path
 
 from peppy import Project as PeppyProject
@@ -18,21 +17,27 @@ except ImportError:
     peppy_validate = None
 
 _BENCH_PEPS_DIR = "bench_peps"
-_PEP_SIZES = [5, 20, 100, 500, 1000, 5000, 10000, 50000, 100000]#, 600000]
+_PEP_SIZES = [5, 20, 100, 500, 1000, 5000, 10000, 50000, 100000, 600000]
 DEFAULT_PATHS = [
     f"{_BENCH_PEPS_DIR}/pep_{n}/config.yaml" for n in _PEP_SIZES
 ]
 
-DEFAULT_SCHEMA = "../../peprs-eido/tests/data/schemas/schema_basic.yaml"
-DEFAULT_N_RUNS = 3
+DEFAULT_SCHEMA = f"{_BENCH_PEPS_DIR}/bedboss_schema.yaml"
+DEFAULT_N_RUNS = 1
 DEFAULT_OUTPUT = "bench_results.csv"
+
+
+def _get_rss_bytes() -> int:
+    """Get current process RSS in bytes via /proc/self/statm."""
+    with open("/proc/self/statm") as f:
+        rss_pages = int(f.read().split()[1])
+    return rss_pages * os.sysconf("SC_PAGE_SIZE")
 
 
 def bench_init(lib: str, path: str):
     """Benchmark project initialization. Returns (project, time_s, memory_bytes)."""
     gc.collect()
-    tracemalloc.start()
-    tracemalloc.reset_peak()
+    rss_before = _get_rss_bytes()
 
     start = time.perf_counter()
     if lib == "peppy":
@@ -41,10 +46,10 @@ def bench_init(lib: str, path: str):
         project = PeprsProject(path)
     elapsed = time.perf_counter() - start
 
-    _, peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
+    rss_after = _get_rss_bytes()
+    mem_delta = max(0, rss_after - rss_before)
 
-    return project, elapsed, peak
+    return project, elapsed, mem_delta
 
 
 def bench_validate(lib: str, project, schema_path: str):
@@ -109,7 +114,8 @@ def write_csv(results: list[dict], output_path: str):
 
 
 def print_summary(results: list[dict]):
-    """Print mean times per library and speedup ratios."""
+    """Print median times per library and speedup ratios."""
+    import statistics
     from collections import defaultdict
 
     init_times = defaultdict(list)
@@ -121,20 +127,20 @@ def print_summary(results: list[dict]):
         val_times[lib].append(float(r["validation_time_s"]))
 
     print("\n--- Summary ---")
-    print(f"{'Library':<8s} {'Mean Init (s)':>14s} {'Mean Validate (s)':>18s}")
-    print("-" * 44)
+    print(f"{'Library':<8s} {'Median Init (s)':>16s} {'Median Validate (s)':>20s}")
+    print("-" * 48)
     for lib in ["peppy", "peprs"]:
         if lib not in init_times:
             continue
-        mean_init = sum(init_times[lib]) / len(init_times[lib])
-        mean_val = sum(val_times[lib]) / len(val_times[lib])
-        print(f"{lib:<8s} {mean_init:>14.6f} {mean_val:>18.6f}")
+        med_init = statistics.median(init_times[lib])
+        med_val = statistics.median(val_times[lib])
+        print(f"{lib:<8s} {med_init:>16.6f} {med_val:>20.6f}")
 
     if "peppy" in init_times and "peprs" in init_times:
-        peppy_init = sum(init_times["peppy"]) / len(init_times["peppy"])
-        peprs_init = sum(init_times["peprs"]) / len(init_times["peprs"])
-        peppy_val = sum(val_times["peppy"]) / len(val_times["peppy"])
-        peprs_val = sum(val_times["peprs"]) / len(val_times["peprs"])
+        peppy_init = statistics.median(init_times["peppy"])
+        peprs_init = statistics.median(init_times["peprs"])
+        peppy_val = statistics.median(val_times["peppy"])
+        peprs_val = statistics.median(val_times["peprs"])
         print(f"\nSpeedup (peppy / peprs):")
         if peprs_init > 0:
             print(f"  Init:     {peppy_init / peprs_init:.2f}x")

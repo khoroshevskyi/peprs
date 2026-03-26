@@ -20,9 +20,9 @@ def plot(rows: list[dict], output_dir: str, log_y: bool):
     for r in rows:
         lib = r["library"]
         data[lib]["n_samples"].append(int(r["n_samples"]))
-        data[lib]["init"].append(float(r["mean_init_time_s"]))
-        data[lib]["validate"].append(float(r["mean_validation_time_s"]))
-        data[lib]["memory"].append(int(r["mean_memory_bytes"]))
+        data[lib]["init"].append(float(r["median_init_time_s"]))
+        data[lib]["validate"].append(float(r["median_validation_time_s"]))
+        data[lib]["memory"].append(int(r["median_memory_bytes"]))
 
     # Plot 1: Init time
     fig, ax = plt.subplots()

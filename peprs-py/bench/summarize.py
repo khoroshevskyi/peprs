@@ -1,7 +1,8 @@
-"""Summarize benchmark CSV: aggregate runs into mean values per (path, library)."""
+"""Summarize benchmark CSV: aggregate runs into median values per (path, library)."""
 
 import argparse
 import csv
+import statistics
 from collections import defaultdict
 
 
@@ -19,9 +20,9 @@ def summarize(rows: list[dict]) -> list[dict]:
     summary = []
     for (path, lib), runs in sorted(groups.items()):
         n_runs = len(runs)
-        mean_init = sum(float(r["init_time_s"]) for r in runs) / n_runs
-        mean_mem = sum(int(r["memory_bytes"]) for r in runs) / n_runs
-        mean_val = sum(float(r["validation_time_s"]) for r in runs) / n_runs
+        median_init = statistics.median(float(r["init_time_s"]) for r in runs)
+        median_mem = statistics.median(int(r["memory_bytes"]) for r in runs)
+        median_val = statistics.median(float(r["validation_time_s"]) for r in runs)
         n_samples = int(runs[0]["n_samples"])
         val_passed = runs[0]["validation_passed"]
         summary.append({
@@ -29,9 +30,9 @@ def summarize(rows: list[dict]) -> list[dict]:
             "library": lib,
             "n_runs": n_runs,
             "n_samples": n_samples,
-            "mean_init_time_s": f"{mean_init:.6f}",
-            "mean_memory_bytes": int(mean_mem),
-            "mean_validation_time_s": f"{mean_val:.6f}",
+            "median_init_time_s": f"{median_init:.6f}",
+            "median_memory_bytes": int(median_mem),
+            "median_validation_time_s": f"{median_val:.6f}",
             "validation_passed": val_passed,
         })
     summary.sort(key=lambda r: r["n_samples"])
@@ -58,8 +59,8 @@ def print_table(summary: list[dict]):
     for r in summary:
         print(
             f"{r['path']:<50s} {r['library']:<8s} {r['n_runs']:>4d} {r['n_samples']:>8d} "
-            f"{r['mean_init_time_s']:>10s} {r['mean_memory_bytes']:>12d} "
-            f"{r['mean_validation_time_s']:>10s} {r['validation_passed']:>7s}"
+            f"{r['median_init_time_s']:>10s} {r['median_memory_bytes']:>12d} "
+            f"{r['median_validation_time_s']:>10s} {r['validation_passed']:>7s}"
         )
 
     # Speedup per path
@@ -71,10 +72,10 @@ def print_table(summary: list[dict]):
     for path, libs in sorted(by_path.items()):
         if "peppy" not in libs or "peprs" not in libs:
             continue
-        peppy_init = float(libs["peppy"]["mean_init_time_s"])
-        peprs_init = float(libs["peprs"]["mean_init_time_s"])
-        peppy_val = float(libs["peppy"]["mean_validation_time_s"])
-        peprs_val = float(libs["peprs"]["mean_validation_time_s"])
+        peppy_init = float(libs["peppy"]["median_init_time_s"])
+        peprs_init = float(libs["peprs"]["median_init_time_s"])
+        peppy_val = float(libs["peppy"]["median_validation_time_s"])
+        peprs_val = float(libs["peprs"]["median_validation_time_s"])
         print(f"\n  {path}")
         if peprs_init > 0:
             print(f"    Init:     {peppy_init / peprs_init:.2f}x")
