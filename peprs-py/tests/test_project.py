@@ -24,7 +24,7 @@ class TestProjectConstructor:
     @pytest.mark.parametrize("example_pep_cfg_path", ["basic", "imply"], indirect=True)
     def test_csv_init(self, example_pep_cfg_path):
         """Verify that a CSV file can be used to initialize a project."""
-        csv_path = example_pep_cfg_path.replace("project_config.yaml", "sample_table.csv")
+        csv_path = os.path.join(os.path.dirname(example_pep_cfg_path), "sample_table.csv")
         p = Project(csv_path)
         assert isinstance(p, Project)
         assert len(p) > 0
