@@ -4,7 +4,10 @@
 
 `peprs` - A spicy 🌶️ library for managing biological sample metadata to enable reproducible and scalable bioinformatics
 
+Don't let sample metadata parsing bottleneck your pipelines!
+
 ## About this project
+
 `peprs` is a rust implementation of the [PEP specification](https://pep.databio.org/) and expanded ecosystem. In short, PEP is a framework for managing biological sample metadata. PEP is a **community driven** effort to create a **fast**, **reliable**, **reusable**, and **scalable** library for handling biological sample metadata.
 
 PEP and its ecosystem is developed and maintained by the [Databio](https://databio.org) team. As a challenge and learning experience, we have been rewriting the core components of the PEP ecosystem in Rust for performance and reliability.
@@ -82,6 +85,27 @@ project.write_csv("output.csv")
 project.write_yaml("output.yaml")
 project.write_json("output.json")
 ```
+
+## Benchmarks
+
+Comparison of **peppy** (pure Python) vs **peprs** (Rust bindings). Averaged over 3 runs per sample size.
+
+### Initialization Time (seconds)
+
+| Library | 5 | 20 | 100 | 500 | 1,000 | 5,000 | 10,000 | 50,000 | 100,000 | 600,000 |
+|---------|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| peppy | 0.019 | 0.026 | 0.096 | 0.428 | 0.851 | 4.226 | 8.700 | 44.017 | 87.613 | 297.433 |
+| peprs | 0.003 | 0.002 | 0.002 | 0.003 | 0.004 | 0.014 | 0.036 | 0.043 | 0.068 | 0.339 |
+| **speedup** | **7x** | **15x** | **50x** | **149x** | **196x** | **306x** | **244x** | **1,021x** | **1,288x** | **877x** |
+
+### Validation Time (seconds)
+
+| Library | 5 | 20 | 100 | 500 | 1,000 | 5,000 | 10,000 | 50,000 | 100,000 | 600,000 |
+|---------|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| peppy | 0.004 | 0.006 | 0.017 | 0.070 | 0.166 | 0.685 | 1.380 | 6.928 | 14.208 | 84.452 |
+| peprs | 0.012 | 0.001 | 0.002 | 0.008 | 0.008 | 0.038 | 0.079 | 0.423 | 0.794 | 4.339 |
+| **speedup** | **0.4x** | **9x** | **10x** | **9x** | **20x** | **18x** | **17x** | **16x** | **18x** | **19x** |
+
 
 ## 🚀 Afterword
 
