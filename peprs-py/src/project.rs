@@ -17,8 +17,7 @@ use serde_json::Value;
 use std::io::Cursor;
 
 use crate::error::PeprsCoreError;
-use crate::samples::PySamplesIter;
-use crate::utils::anyvalue_to_pyobject;
+use crate::samples::{sample_to_pysample, PySample, PySamplesIter};
 
 ///
 /// Python-exposed PEP project, wrapping a [`Project`] from peprs-core.
@@ -601,18 +600,12 @@ impl PyProject {
     ///
     /// # Returns
     ///
-    /// A Python dict of column-name to value pairs for the matching sample.
-    ///
-    pub fn get_sample(&self, py: Python<'_>, name: &str) -> PyResult<HashMap<String, PyObject>> {
+    /// A `Sample` object representing the matching sample, with dict-style
+    /// access via `__getitem__` for column-name to value lookups.
+    pub fn get_sample(&self, py: Python<'_>, name: &str) -> PyResult<PySample> {
         match self.inner.get_sample(name) {
             Ok(sample) => match sample {
-                Some(s) => {
-                    let map = s
-                        .iter()
-                        .map(|(k, v)| (k.clone(), anyvalue_to_pyobject(py, v)))
-                        .collect();
-                    Ok(map)
-                }
+                Some(s) => Ok(sample_to_pysample(py, &s)),
                 None => Err(PyValueError::new_err(format!(
                     "Sample name: '{}' not found in sample table",
                     name
