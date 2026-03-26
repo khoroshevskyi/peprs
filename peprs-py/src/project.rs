@@ -600,8 +600,8 @@ impl PyProject {
     ///
     /// # Returns
     ///
-    /// A Python dict of column-name to value pairs for the matching sample.
-    ///
+    /// A `Sample` object representing the matching sample, with dict-style
+    /// access via `__getitem__` for column-name to value lookups.
     pub fn get_sample(&self, py: Python<'_>, name: &str) -> PyResult<PySample> {
         match self.inner.get_sample(name) {
             Ok(sample) => match sample {
