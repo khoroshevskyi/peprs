@@ -2480,17 +2480,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jsonpath_lib_polars_vendor"
-version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4bd9354947622f7471ff713eacaabdb683ccb13bba4edccaab9860abf480b7d"
-dependencies = [
- "log",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "jsonschema"
 version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2509,7 +2498,6 @@ dependencies = [
  "percent-encoding",
  "referencing",
  "regex-syntax",
- "reqwest",
  "serde",
  "serde_json",
  "uuid-simd",
@@ -3246,6 +3234,8 @@ name = "peprs-core"
 version = "0.1.0"
 dependencies = [
  "polars",
+ "polars-io",
+ "polars-lazy",
  "pretty_assertions",
  "regex",
  "rstest",
@@ -3792,7 +3782,6 @@ dependencies = [
  "hashbrown 0.15.5",
  "hex",
  "indexmap 2.12.0",
- "jsonpath_lib_polars_vendor",
  "libm",
  "memchr",
  "num-traits",
@@ -3800,13 +3789,11 @@ dependencies = [
  "polars-compute",
  "polars-core",
  "polars-error",
- "polars-json",
  "polars-schema",
  "polars-utils",
  "rayon",
  "regex",
  "regex-syntax",
- "serde_json",
  "strum_macros",
  "unicode-normalization",
  "unicode-reverse",
@@ -4568,7 +4555,6 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "encoding_rs",
- "futures-channel",
  "futures-core",
  "futures-util",
  "h2",

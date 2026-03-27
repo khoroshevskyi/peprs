@@ -565,7 +565,10 @@ impl Project {
         let zipped = zipped.unwrap_or(false);
 
         match zipped {
+            #[cfg(feature = "zip")]
             true => self.write_raw_zip(path),
+            #[cfg(not(feature = "zip"))]
+            true => Err(Error::Processing("zip feature not enabled".to_string())),
             false => self.write_raw_folder(path),
         }
     }
@@ -628,6 +631,7 @@ impl Project {
     ///
     /// * `path` - Destination zip file path.
     ///
+    #[cfg(feature = "zip")]
     pub fn write_raw_zip<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         use ::zip::write::SimpleFileOptions;
         use ::zip::{CompressionMethod, ZipWriter};

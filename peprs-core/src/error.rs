@@ -40,6 +40,7 @@ pub enum Error {
     Json(#[from] serde_json::Error),
 
     /// Zip archive errors
+    #[cfg(feature = "zip")]
     #[error("Zip error: {0}")]
     Zip(#[from] zip::result::ZipError),
 }
