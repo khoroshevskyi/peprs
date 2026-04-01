@@ -4,147 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>peprs - PEP Validator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #f5f5f5;
-            color: #333;
-            padding: 2rem;
-        }
-        h1 { text-align: center; margin-bottom: 1.5rem; font-size: 1.5rem; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .panels {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.5rem;
-            margin-bottom: 1.5rem;
-        }
-        .panel { display: flex; flex-direction: column; }
-        .panel-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0.5rem;
-        }
-        .panel-header label { font-weight: 600; font-size: 0.95rem; }
-        .panel-actions { display: flex; gap: 0.4rem; }
-        .btn-file, .btn-clear {
-            background: #e0e0e0;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            padding: 0.3rem 0.7rem;
-            font-size: 0.8rem;
-            cursor: pointer;
-        }
-        .btn-file:hover, .btn-clear:hover { background: #d0d0d0; }
-        .btn-clear { display: none; }
-        textarea {
-            width: 100%;
-            height: 350px;
-            font-family: "SF Mono", "Fira Code", "Consolas", monospace;
-            font-size: 0.85rem;
-            padding: 0.75rem;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            resize: vertical;
-            background: #fff;
-            tab-size: 2;
-        }
-        textarea:focus { outline: 2px solid #4a90d9; border-color: #4a90d9; }
-        .file-badge {
-            display: none;
-            width: 100%;
-            height: 350px;
-            border: 2px dashed #4a90d9;
-            border-radius: 6px;
-            background: #f0f6ff;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            gap: 0.5rem;
-            color: #4a90d9;
-            font-size: 0.9rem;
-        }
-        .file-badge .filename {
-            font-weight: 600;
-            font-size: 1.1rem;
-            word-break: break-all;
-            text-align: center;
-            padding: 0 1rem;
-        }
-        .file-badge .filesize { color: #888; font-size: 0.8rem; }
-        .actions { text-align: center; margin-bottom: 1.5rem; }
-        .btn-validate {
-            background: #4a90d9;
-            color: #fff;
-            border: none;
-            border-radius: 6px;
-            padding: 0.7rem 2rem;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-        }
-        .btn-validate:hover { background: #3a7bc8; }
-        .btn-validate:disabled { background: #999; cursor: not-allowed; }
-        #results {
-            border-radius: 6px;
-            padding: 1rem;
-            font-family: "SF Mono", "Fira Code", "Consolas", monospace;
-            font-size: 0.85rem;
-            white-space: pre-wrap;
-            word-break: break-word;
-            min-height: 3rem;
-            background: #fff;
-            border: 1px solid #ccc;
-        }
-        #results.valid { background: #e6f9e6; border-color: #4caf50; color: #2e7d32; }
-        #results.invalid { background: #fdecea; border-color: #e53935; color: #c62828; }
-        #results.error { background: #fff3e0; border-color: #ff9800; color: #e65100; }
-        .loading { text-align: center; color: #888; }
-        .pephub-row {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-            padding: 0.75rem;
-            background: #fff;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-        }
-        .pephub-row label { font-weight: 600; font-size: 0.85rem; white-space: nowrap; }
-        .pephub-row input[type="text"] {
-            flex: 1;
-            font-family: "SF Mono", "Fira Code", "Consolas", monospace;
-            font-size: 0.85rem;
-            padding: 0.4rem 0.6rem;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        .pephub-row input[type="text"]:focus { outline: 2px solid #4a90d9; border-color: #4a90d9; }
+        textarea.form-control { height: 350px; font-family: monospace; font-size: 0.85rem; tab-size: 2; resize: vertical; }
+        .browse-panel { display: flex; flex-direction: column; height: 350px; border: 1px solid var(--bs-border-color); border-top: none; border-radius: 0 0 var(--bs-border-radius) var(--bs-border-radius); }
+        .browse-list { flex: 1; overflow-y: auto; }
+        .browse-item { cursor: pointer; }
+        .browse-item .text-truncate { max-width: 100%; }
+        .file-badge { display: none; height: 350px; border: 2px dashed var(--bs-primary); border-radius: var(--bs-border-radius); background: var(--bs-primary-bg-subtle); }
+        #results { white-space: pre-wrap; word-break: break-word; font-family: monospace; font-size: 0.85rem; }
     </style>
 </head>
-<body>
-    <div class="container">
-        <h1>peprs - PEP Validator (WASM)</h1>
+<body class="bg-body-tertiary">
+    <div class="container py-4" style="max-width:1200px;">
+        <h1 class="text-center mb-4 fs-4">peprs - PEP Validator (WASM)</h1>
 
-        <div class="pephub-row">
-            <label for="pephub-input">Load from PEPHub:</label>
-            <input type="text" id="pephub-input" placeholder="namespace/name:tag  e.g. khoroshevskyi/donald_test_pep:default">
-            <button class="btn-file" id="btn-pephub">Fetch</button>
-        </div>
-
-        <div class="panels">
-            <div class="panel">
-                <div class="panel-header">
-                    <label>PEP Project JSON</label>
-                    <div class="panel-actions">
-                        <button class="btn-clear" id="btn-clear-project">Clear file</button>
-                        <button class="btn-file" id="btn-load-project">Load file</button>
+        <div class="row g-3 mb-3">
+            <!-- Project Panel -->
+            <div class="col-md-6">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="fw-semibold">PEP Project JSON</label>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary d-none" id="btn-clear-project">Clear file</button>
+                        <button class="btn btn-outline-secondary" id="btn-load-project">Load file</button>
                         <input type="file" id="file-project" accept=".json,.yaml,.yml" hidden>
                     </div>
                 </div>
-                <textarea id="project-input" spellcheck="false">{
+                <ul class="nav nav-tabs" id="proj-tabs">
+                    <li class="nav-item"><a class="nav-link active" href="#" data-tab="proj-editor">Editor</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#" data-tab="proj-pephub">Browse PEPHub</a></li>
+                </ul>
+                <div id="tab-proj-editor">
+                    <textarea class="form-control rounded-top-0" id="project-input" spellcheck="false">{
   "config": {
     "pep_version": "2.0.0",
     "description": "A basic PEP project"
@@ -154,23 +45,45 @@
     { "sample_name": "frog_2", "protocol": "anySampleType", "file": "data/frog2_data.txt" }
   ]
 }</textarea>
-                <div class="file-badge" id="badge-project">
-                    <div class="filename" id="badge-project-name"></div>
-                    <div class="filesize" id="badge-project-size"></div>
-                    <div>File will be read on validate</div>
+                    <div class="file-badge d-none align-items-center justify-content-center flex-column gap-1 text-primary" id="badge-project">
+                        <div class="fw-bold fs-6" id="badge-project-name"></div>
+                        <div class="text-secondary small" id="badge-project-size"></div>
+                        <div>File will be read on validate</div>
+                    </div>
+                </div>
+                <div id="tab-proj-pephub" class="d-none">
+                    <div class="browse-panel">
+                        <div class="input-group input-group-sm border-bottom">
+                            <input type="text" class="form-control border-0 rounded-0" id="proj-namespace" placeholder="Namespace" value="databio" style="max-width:140px;">
+                            <input type="text" class="form-control border-0 rounded-0 border-start" id="proj-search" placeholder="Search projects...">
+                        </div>
+                        <div class="browse-list list-group list-group-flush" id="proj-list">
+                            <div class="text-center text-muted p-4 small">Enter a namespace to browse projects</div>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center px-2 py-1 bg-body-tertiary border-top small">
+                            <button class="btn btn-sm btn-outline-secondary d-none" id="btn-proj-load-more">Load more</button>
+                            <span class="text-muted" id="proj-count"></span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="panel">
-                <div class="panel-header">
-                    <label>Eido Schema JSON</label>
-                    <div class="panel-actions">
-                        <button class="btn-clear" id="btn-clear-schema">Clear file</button>
-                        <button class="btn-file" id="btn-load-schema">Load file</button>
+            <!-- Schema Panel -->
+            <div class="col-md-6">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="fw-semibold">Eido Schema JSON</label>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary d-none" id="btn-clear-schema">Clear file</button>
+                        <button class="btn btn-outline-secondary" id="btn-load-schema">Load file</button>
                         <input type="file" id="file-schema" accept=".json,.yaml,.yml" hidden>
                     </div>
                 </div>
-                <textarea id="schema-input" spellcheck="false">{
+                <ul class="nav nav-tabs" id="schema-tabs">
+                    <li class="nav-item"><a class="nav-link active" href="#" data-tab="editor">Editor</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#" data-tab="pephub">Browse PEPHub Schemas</a></li>
+                </ul>
+                <div id="tab-editor">
+                    <textarea class="form-control rounded-top-0" id="schema-input" spellcheck="false">{
   "description": "Schema for basic example PEP",
   "properties": {
     "samples": {
@@ -187,19 +100,34 @@
     }
   }
 }</textarea>
-                <div class="file-badge" id="badge-schema">
-                    <div class="filename" id="badge-schema-name"></div>
-                    <div class="filesize" id="badge-schema-size"></div>
-                    <div>File will be read on validate</div>
+                    <div class="file-badge d-none align-items-center justify-content-center flex-column gap-1 text-primary" id="badge-schema">
+                        <div class="fw-bold fs-6" id="badge-schema-name"></div>
+                        <div class="text-secondary small" id="badge-schema-size"></div>
+                        <div>File will be read on validate</div>
+                    </div>
+                </div>
+                <div id="tab-pephub" class="d-none">
+                    <div class="browse-panel">
+                        <input type="text" class="form-control border-0 rounded-0 border-bottom" id="schema-search" placeholder="Search schemas...">
+                        <div class="browse-list list-group list-group-flush" id="schema-list">
+                            <div class="text-center text-muted p-4 small">Loading schemas...</div>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center px-2 py-1 bg-body-tertiary border-top small">
+                            <button class="btn btn-sm btn-outline-secondary d-none" id="btn-load-more">Load more</button>
+                            <span class="text-muted" id="schema-count"></span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="actions">
-            <button class="btn-validate" id="btn-validate" disabled>Loading WASM...</button>
+        <div class="text-center mb-3">
+            <button class="btn btn-primary px-4" id="btn-validate" disabled>Loading WASM...</button>
         </div>
 
-        <div id="results" class="loading">Initializing...</div>
+        <div class="card">
+            <div class="card-body" id="results">Initializing...</div>
+        </div>
     </div>
 
     <script type="module">
@@ -208,7 +136,6 @@
         const btnValidate = document.getElementById('btn-validate');
         const results = document.getElementById('results');
 
-        // Per-panel state: either textarea content or a File reference
         const panels = {
             project: {
                 textarea: document.getElementById('project-input'),
@@ -251,17 +178,19 @@
             panel.file = file;
             panel.badgeName.textContent = file.name;
             panel.badgeSize.textContent = formatSize(file.size);
-            panel.textarea.style.display = 'none';
+            panel.textarea.classList.add('d-none');
+            panel.badge.classList.remove('d-none');
             panel.badge.style.display = 'flex';
-            panel.btnClear.style.display = 'inline-block';
+            panel.btnClear.classList.remove('d-none');
         }
 
         function clearFile(panel) {
             panel.file = null;
             panel.fileInput.value = '';
-            panel.textarea.style.display = '';
-            panel.badge.style.display = 'none';
-            panel.btnClear.style.display = 'none';
+            panel.textarea.classList.remove('d-none');
+            panel.badge.classList.add('d-none');
+            panel.badge.style.display = '';
+            panel.btnClear.classList.add('d-none');
         }
 
         function readFile(file) {
@@ -278,105 +207,312 @@
             return panel.textarea.value;
         }
 
-        // PEPHub fetch
-        const pephubInput = document.getElementById('pephub-input');
-        const btnPephub = document.getElementById('btn-pephub');
+        // Generic tab wiring
+        function wireTabs(tabContainer, tabMap) {
+            const links = tabContainer.querySelectorAll('.nav-link');
+            links.forEach(link => {
+                link.addEventListener('click', e => {
+                    e.preventDefault();
+                    links.forEach(l => l.classList.remove('active'));
+                    link.classList.add('active');
+                    const target = link.dataset.tab;
+                    for (const [key, el] of Object.entries(tabMap)) {
+                        if (key === target) el.classList.remove('d-none');
+                        else el.classList.add('d-none');
+                    }
+                    if (link.onActivate) link.onActivate();
+                });
+            });
+            return links;
+        }
 
-        btnPephub.addEventListener('click', async () => {
-            const raw = pephubInput.value.trim();
-            if (!raw) return;
+        // --- Project browser ---
+        const projTabMap = {
+            'proj-editor': document.getElementById('tab-proj-editor'),
+            'proj-pephub': document.getElementById('tab-proj-pephub'),
+        };
+        const projLinks = wireTabs(document.getElementById('proj-tabs'), projTabMap);
+        projLinks[1].onActivate = () => { if (projCache.length === 0) loadProjects(); };
 
-            // Parse "namespace/name:tag" or "namespace/name"
-            const match = raw.match(/^([^/]+)\/([^:]+?)(?::(.+))?$/);
-            if (!match) {
-                results.className = 'error';
-                results.textContent = 'Invalid registry path. Use format: namespace/name:tag';
+        const projList = document.getElementById('proj-list');
+        const projNamespace = document.getElementById('proj-namespace');
+        const projSearchInput = document.getElementById('proj-search');
+        const projCount = document.getElementById('proj-count');
+        const btnProjLoadMore = document.getElementById('btn-proj-load-more');
+        let projCache = [];
+        let projOffset = 0;
+        let projTotal = 0;
+        const PROJ_LIMIT = 25;
+        let projSearchTimeout = null;
+
+        async function loadProjects(offset = 0, append = false) {
+            const ns = projNamespace.value.trim();
+            if (!ns) {
+                projList.innerHTML = '<div class="text-center text-muted p-4 small">Enter a namespace to browse projects</div>';
                 return;
             }
-            const [, ns, name, tag] = match;
-            const tagParam = tag || 'default';
-            const url = `https://pephub-api.databio.org/api/v1/projects/${ns}/${name}?tag=${encodeURIComponent(tagParam)}&raw=true`;
-
-            btnPephub.disabled = true;
-            btnPephub.textContent = 'Fetching...';
-            results.className = '';
-            results.textContent = `Fetching from PEPHub: ${ns}/${name}:${tagParam}...`;
+            if (!append) {
+                projList.innerHTML = '<div class="text-center text-muted p-4 small">Loading projects...</div>';
+                projOffset = 0;
+            }
+            const query = projSearchInput.value.trim();
+            let url = `https://pephub-api.databio.org/api/v1/namespaces/${encodeURIComponent(ns)}/projects?limit=${PROJ_LIMIT}&offset=${offset}&order_by=update_date&order_desc=true`;
+            if (query) url += `&query=${encodeURIComponent(query)}`;
 
             try {
-                const tFetch = performance.now();
                 const resp = await fetch(url);
-                if (!resp.ok) throw new Error(`PEPHub returned ${resp.status}: ${resp.statusText}`);
-                const text = await resp.text();
-                const elapsed = performance.now() - tFetch;
+                if (!resp.ok) throw new Error(`${resp.status}`);
+                const data = await resp.json();
+                projTotal = data.count;
+                projOffset = offset;
+                projCache = append ? projCache.concat(data.results) : data.results;
+                renderProjects();
+                projCount.textContent = `${projCache.length} of ${projTotal} projects`;
+                btnProjLoadMore.classList.toggle('d-none', projCache.length >= projTotal);
+            } catch (e) {
+                projList.innerHTML = `<div class="text-center text-muted p-4 small">Failed to load: ${e.message}</div>`;
+                btnProjLoadMore.classList.add('d-none');
+            }
+        }
 
-                // Clear any file selection and put the fetched JSON in the textarea
+        function renderProjects() {
+            if (projCache.length === 0) {
+                projList.innerHTML = '<div class="text-center text-muted p-4 small">No projects found</div>';
+                return;
+            }
+            projList.innerHTML = '';
+            for (const p of projCache) {
+                const el = document.createElement('a');
+                el.className = 'list-group-item list-group-item-action browse-item d-flex align-items-center gap-2 py-2';
+                el.href = '#';
+
+                const info = document.createElement('div');
+                info.className = 'flex-grow-1 min-w-0 overflow-hidden';
+                const nameEl = document.createElement('div');
+                nameEl.className = 'fw-semibold small text-truncate';
+                nameEl.textContent = `${p.namespace}/${p.name}`;
+                const descEl = document.createElement('div');
+                descEl.className = 'text-muted text-truncate';
+                descEl.style.fontSize = '0.75rem';
+                const descText = (p.description || 'No description').replace(/[\r\n]+/g, ' ');
+                descEl.textContent = descText;
+                info.append(nameEl, descEl);
+                el.appendChild(info);
+
+                if (p.tag && p.tag !== 'default') {
+                    const tagEl = document.createElement('span');
+                    tagEl.className = 'badge text-bg-warning';
+                    tagEl.textContent = p.tag;
+                    el.appendChild(tagEl);
+                }
+
+                const samples = document.createElement('span');
+                samples.className = 'badge text-bg-light text-nowrap';
+                samples.textContent = `${p.number_of_samples}`;
+                el.appendChild(samples);
+
+                el.addEventListener('click', e => { e.preventDefault(); fetchProject(p, el); });
+                projList.appendChild(el);
+            }
+        }
+
+        async function fetchProject(proj, el) {
+            projList.querySelectorAll('.browse-item').forEach(i => i.classList.remove('active'));
+            el.classList.add('active');
+
+            const tag = proj.tag || 'default';
+            const url = `https://pephub-api.databio.org/api/v1/projects/${proj.namespace}/${proj.name}?tag=${encodeURIComponent(tag)}&raw=true`;
+            results.className = 'card-body';
+            results.textContent = `Fetching project ${proj.namespace}/${proj.name}:${tag}...`;
+
+            try {
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error(`${resp.status}: ${resp.statusText}`);
+                const text = await resp.text();
+
                 clearFile(panels.project);
                 panels.project.textarea.value = text;
-                results.className = 'valid';
-                results.textContent = `Loaded ${ns}/${name}:${tagParam} from PEPHub (${fmt(elapsed)}).`;
-            } catch (e) {
-                results.className = 'error';
-                results.textContent = `PEPHub fetch failed: ${e.message}`;
-            } finally {
-                btnPephub.disabled = false;
-                btnPephub.textContent = 'Fetch';
-            }
-        });
 
-        // Wire up each panel
+                results.className = 'card-body';
+                results.textContent = `Loaded project: ${proj.namespace}/${proj.name}:${tag} (${proj.number_of_samples} samples)`;
+            } catch (e) {
+                results.className = 'card-body text-danger bg-danger-subtle';
+                results.textContent = `Failed to fetch project: ${e.message}`;
+            }
+        }
+
+        projSearchInput.addEventListener('input', () => { clearTimeout(projSearchTimeout); projSearchTimeout = setTimeout(() => loadProjects(), 300); });
+        projNamespace.addEventListener('input', () => { clearTimeout(projSearchTimeout); projSearchTimeout = setTimeout(() => loadProjects(), 300); });
+        btnProjLoadMore.addEventListener('click', () => loadProjects(projOffset + PROJ_LIMIT, true));
+
+        // --- Schema browser ---
+        const schemaTabMap = {
+            'editor': document.getElementById('tab-editor'),
+            'pephub': document.getElementById('tab-pephub'),
+        };
+        const schemaLinks = wireTabs(document.getElementById('schema-tabs'), schemaTabMap);
+        schemaLinks[1].onActivate = () => { if (schemaCache.length === 0) loadSchemas(); };
+
+        const schemaList = document.getElementById('schema-list');
+        const schemaSearch = document.getElementById('schema-search');
+        const schemaCount = document.getElementById('schema-count');
+        const btnLoadMore = document.getElementById('btn-load-more');
+        let schemaCache = [];
+        let schemaPage = 0;
+        let schemaTotal = 0;
+        const PAGE_SIZE = 25;
+        let searchTimeout = null;
+
+        async function loadSchemas(page = 0, append = false) {
+            if (!append) {
+                schemaList.innerHTML = '<div class="text-center text-muted p-4 small">Loading schemas...</div>';
+                schemaPage = 0;
+            }
+            const query = schemaSearch.value.trim();
+            let url = `https://pephub-api.databio.org/api/v1/schemas?page_size=${PAGE_SIZE}&page=${page}&order_by=update_date&order_desc=true`;
+            if (query) url += `&query=${encodeURIComponent(query)}`;
+
+            try {
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error(`${resp.status}`);
+                const data = await resp.json();
+                schemaTotal = data.pagination.total;
+                schemaPage = page;
+                schemaCache = append ? schemaCache.concat(data.results) : data.results;
+                renderSchemas();
+                schemaCount.textContent = `${schemaCache.length} of ${schemaTotal} schemas`;
+                btnLoadMore.classList.toggle('d-none', schemaCache.length >= schemaTotal);
+            } catch (e) {
+                schemaList.innerHTML = `<div class="text-center text-muted p-4 small">Failed to load: ${e.message}</div>`;
+                btnLoadMore.classList.add('d-none');
+            }
+        }
+
+        function renderSchemas() {
+            if (schemaCache.length === 0) {
+                schemaList.innerHTML = '<div class="text-center text-muted p-4 small">No schemas found</div>';
+                return;
+            }
+            schemaList.innerHTML = '';
+            for (const s of schemaCache) {
+                const el = document.createElement('a');
+                el.className = 'list-group-item list-group-item-action browse-item d-flex align-items-center gap-2 py-2';
+                el.href = '#';
+
+                const info = document.createElement('div');
+                info.className = 'flex-grow-1 min-w-0 overflow-hidden';
+                const nameEl = document.createElement('div');
+                nameEl.className = 'fw-semibold small text-truncate';
+                nameEl.textContent = `${s.namespace}/${s.schema_name}`;
+                const descEl = document.createElement('div');
+                descEl.className = 'text-muted text-truncate';
+                descEl.style.fontSize = '0.75rem';
+                const descText = (s.description || 'No description').replace(/[\r\n]+/g, ' ');
+                descEl.textContent = descText;
+                info.append(nameEl, descEl);
+                el.appendChild(info);
+
+                if (s.latest_released_version) {
+                    const ver = document.createElement('span');
+                    ver.className = 'badge text-bg-primary';
+                    ver.textContent = `v${s.latest_released_version}`;
+                    el.appendChild(ver);
+                }
+
+                el.addEventListener('click', e => { e.preventDefault(); fetchSchema(s, el); });
+                schemaList.appendChild(el);
+            }
+        }
+
+        async function fetchSchema(schema, el) {
+            schemaList.querySelectorAll('.browse-item').forEach(i => i.classList.remove('active'));
+            el.classList.add('active');
+
+            const version = schema.latest_released_version;
+            if (!version) {
+                results.className = 'card-body text-danger bg-danger-subtle';
+                results.textContent = `Schema ${schema.namespace}/${schema.schema_name} has no released version.`;
+                return;
+            }
+
+            const url = `https://pephub-api.databio.org/api/v1/schemas/${schema.namespace}/${schema.schema_name}/versions/${version}?format=json`;
+            results.className = 'card-body';
+            results.textContent = `Fetching schema ${schema.namespace}/${schema.schema_name} v${version}...`;
+
+            try {
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error(`${resp.status}: ${resp.statusText}`);
+                const data = await resp.json();
+
+                clearFile(panels.schema);
+                panels.schema.textarea.value = JSON.stringify(data, null, 2);
+
+                results.className = 'card-body';
+                results.textContent = `Loaded schema: ${schema.namespace}/${schema.schema_name} v${version}`;
+            } catch (e) {
+                results.className = 'card-body text-danger bg-danger-subtle';
+                results.textContent = `Failed to fetch schema: ${e.message}`;
+            }
+        }
+
+        schemaSearch.addEventListener('input', () => { clearTimeout(searchTimeout); searchTimeout = setTimeout(() => loadSchemas(), 300); });
+        btnLoadMore.addEventListener('click', () => loadSchemas(schemaPage + 1, true));
+
+        // --- File load/clear wiring ---
         for (const panel of Object.values(panels)) {
             panel.btnLoad.addEventListener('click', () => panel.fileInput.click());
-            panel.fileInput.addEventListener('change', () => {
-                const file = panel.fileInput.files[0];
-                if (file) showFile(panel, file);
-            });
+            panel.fileInput.addEventListener('change', () => { const file = panel.fileInput.files[0]; if (file) showFile(panel, file); });
             panel.btnClear.addEventListener('click', () => clearFile(panel));
         }
 
-        // Validate
+        // --- Validate ---
         btnValidate.addEventListener('click', async () => {
-            results.className = '';
+            results.className = 'card-body';
             results.textContent = 'Reading inputs...';
             btnValidate.disabled = true;
 
             try {
                 const t0 = performance.now();
-
-                const [projectText, schemaText] = await Promise.all([
-                    getText(panels.project),
-                    getText(panels.schema),
-                ]);
-
+                const [projectText, schemaText] = await Promise.all([getText(panels.project), getText(panels.schema)]);
                 const tRead = performance.now();
                 results.textContent = 'Validating...';
-
-                // Yield to let the UI update before heavy WASM work
                 await new Promise(r => setTimeout(r, 0));
 
                 const project = new WasmProject(projectText);
                 const result = validate(project, schemaText);
                 const tDone = performance.now();
-
                 const timing = `\n\nTiming: ${fmt(tDone - t0)} total (read: ${fmt(tRead - t0)}, validate: ${fmt(tDone - tRead)})`;
 
                 if (result.valid) {
-                    results.className = 'valid';
+                    results.className = 'card-body text-success bg-success-subtle';
                     const name = project.get_name() || '(unnamed)';
                     const count = project.len();
                     results.textContent = `Valid!\n\nProject: ${name}\nSamples: ${count}${timing}`;
                 } else {
-                    results.className = 'invalid';
-                    const lines = result.errors.map(e => {
-                        const where = e.sample_name ? `sample '${e.sample_name}'` : 'project';
-                        const path = e.path ? ` at ${e.path}` : '';
-                        return `- [${where}${path}] ${e.message}`;
-                    });
-                    results.textContent = `Validation failed (${result.errors.length} error(s)):\n\n${lines.join('\n')}${timing}`;
+                    results.className = 'card-body text-danger bg-danger-subtle';
+                    // Group errors by message+path, collect sample names
+                    const groups = new Map();
+                    for (const e of result.errors) {
+                        const key = `${e.path || ''}|||${e.message}`;
+                        if (!groups.has(key)) groups.set(key, { path: e.path, message: e.message, samples: [] });
+                        if (e.sample_name) groups.get(key).samples.push(e.sample_name);
+                    }
+                    const lines = [];
+                    for (const g of groups.values()) {
+                        const path = g.path ? ` at ${g.path}` : '';
+                        if (g.samples.length === 0) {
+                            lines.push(`- [project${path}] ${g.message}`);
+                        } else if (g.samples.length <= 50) {
+                            lines.push(`- [in ${g.samples.length} samples: ${g.samples.join(', ')}${path}] ${g.message}`);
+                        } else {
+                            lines.push(`- [in more than 50 samples (${g.samples.length} total)${path}] ${g.message}`);
+                        }
+                    }
+                    results.textContent = `Validation failed (${result.errors.length} error(s), ${groups.size} unique):\n\n${lines.join('\n')}${timing}`;
                 }
-
                 project.free();
             } catch (e) {
-                results.className = 'error';
+                results.className = 'card-body text-warning bg-warning-subtle';
                 results.textContent = `Error: ${e.message || e}`;
             } finally {
                 btnValidate.disabled = false;
@@ -387,7 +523,7 @@
         await wasmInit();
         btnValidate.disabled = false;
         btnValidate.textContent = 'Validate';
-        results.className = '';
+        results.className = 'card-body';
         results.textContent = 'Ready. Click "Validate" to check your PEP project against the schema.';
     </script>
 </body>
