@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>peprs - PEP Validator</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            padding: 2rem;
+        }
+        h1 { text-align: center; margin-bottom: 1.5rem; font-size: 1.5rem; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .panels {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .panel { display: flex; flex-direction: column; }
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .panel-header label { font-weight: 600; font-size: 0.95rem; }
+        .panel-actions { display: flex; gap: 0.4rem; }
+        .btn-file, .btn-clear {
+            background: #e0e0e0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 0.3rem 0.7rem;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+        .btn-file:hover, .btn-clear:hover { background: #d0d0d0; }
+        .btn-clear { display: none; }
+        textarea {
+            width: 100%;
+            height: 350px;
+            font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+            font-size: 0.85rem;
+            padding: 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            resize: vertical;
+            background: #fff;
+            tab-size: 2;
+        }
+        textarea:focus { outline: 2px solid #4a90d9; border-color: #4a90d9; }
+        .file-badge {
+            display: none;
+            width: 100%;
+            height: 350px;
+            border: 2px dashed #4a90d9;
+            border-radius: 6px;
+            background: #f0f6ff;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 0.5rem;
+            color: #4a90d9;
+            font-size: 0.9rem;
+        }
+        .file-badge .filename {
+            font-weight: 600;
+            font-size: 1.1rem;
+            word-break: break-all;
+            text-align: center;
+            padding: 0 1rem;
+        }
+        .file-badge .filesize { color: #888; font-size: 0.8rem; }
+        .actions { text-align: center; margin-bottom: 1.5rem; }
+        .btn-validate {
+            background: #4a90d9;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 0.7rem 2rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-validate:hover { background: #3a7bc8; }
+        .btn-validate:disabled { background: #999; cursor: not-allowed; }
+        #results {
+            border-radius: 6px;
+            padding: 1rem;
+            font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+            min-height: 3rem;
+            background: #fff;
+            border: 1px solid #ccc;
+        }
+        #results.valid { background: #e6f9e6; border-color: #4caf50; color: #2e7d32; }
+        #results.invalid { background: #fdecea; border-color: #e53935; color: #c62828; }
+        #results.error { background: #fff3e0; border-color: #ff9800; color: #e65100; }
+        .loading { text-align: center; color: #888; }
+        .pephub-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+        .pephub-row label { font-weight: 600; font-size: 0.85rem; white-space: nowrap; }
+        .pephub-row input[type="text"] {
+            flex: 1;
+            font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+            font-size: 0.85rem;
+            padding: 0.4rem 0.6rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .pephub-row input[type="text"]:focus { outline: 2px solid #4a90d9; border-color: #4a90d9; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>peprs - PEP Validator (WASM)</h1>
+
+        <div class="pephub-row">
+            <label for="pephub-input">Load from PEPHub:</label>
+            <input type="text" id="pephub-input" placeholder="namespace/name:tag  e.g. khoroshevskyi/donald_test_pep:default">
+            <button class="btn-file" id="btn-pephub">Fetch</button>
+        </div>
+
+        <div class="panels">
+            <div class="panel">
+                <div class="panel-header">
+                    <label>PEP Project JSON</label>
+                    <div class="panel-actions">
+                        <button class="btn-clear" id="btn-clear-project">Clear file</button>
+                        <button class="btn-file" id="btn-load-project">Load file</button>
+                        <input type="file" id="file-project" accept=".json,.yaml,.yml" hidden>
+                    </div>
+                </div>
+                <textarea id="project-input" spellcheck="false">{
+  "config": {
+    "pep_version": "2.0.0",
+    "description": "A basic PEP project"
+  },
+  "sample_list": [
+    { "sample_name": "frog_1", "protocol": "anySampleType", "file": "data/frog1_data.txt" },
+    { "sample_name": "frog_2", "protocol": "anySampleType", "file": "data/frog2_data.txt" }
+  ]
+}</textarea>
+                <div class="file-badge" id="badge-project">
+                    <div class="filename" id="badge-project-name"></div>
+                    <div class="filesize" id="badge-project-size"></div>
+                    <div>File will be read on validate</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <label>Eido Schema JSON</label>
+                    <div class="panel-actions">
+                        <button class="btn-clear" id="btn-clear-schema">Clear file</button>
+                        <button class="btn-file" id="btn-load-schema">Load file</button>
+                        <input type="file" id="file-schema" accept=".json,.yaml,.yml" hidden>
+                    </div>
+                </div>
+                <textarea id="schema-input" spellcheck="false">{
+  "description": "Schema for basic example PEP",
+  "properties": {
+    "samples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "sample_name": { "type": "string" },
+          "protocol": { "type": "string" },
+          "file": { "type": "string" }
+        },
+        "required": ["sample_name", "protocol", "file"]
+      }
+    }
+  }
+}</textarea>
+                <div class="file-badge" id="badge-schema">
+                    <div class="filename" id="badge-schema-name"></div>
+                    <div class="filesize" id="badge-schema-size"></div>
+                    <div>File will be read on validate</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="btn-validate" id="btn-validate" disabled>Loading WASM...</button>
+        </div>
+
+        <div id="results" class="loading">Initializing...</div>
+    </div>
+
+    <script type="module">
+        import wasmInit, { WasmProject, validate } from '../pkg/peprs_wasm.js';
+
+        const btnValidate = document.getElementById('btn-validate');
+        const results = document.getElementById('results');
+
+        // Per-panel state: either textarea content or a File reference
+        const panels = {
+            project: {
+                textarea: document.getElementById('project-input'),
+                badge: document.getElementById('badge-project'),
+                badgeName: document.getElementById('badge-project-name'),
+                badgeSize: document.getElementById('badge-project-size'),
+                fileInput: document.getElementById('file-project'),
+                btnLoad: document.getElementById('btn-load-project'),
+                btnClear: document.getElementById('btn-clear-project'),
+                file: null,
+            },
+            schema: {
+                textarea: document.getElementById('schema-input'),
+                badge: document.getElementById('badge-schema'),
+                badgeName: document.getElementById('badge-schema-name'),
+                badgeSize: document.getElementById('badge-schema-size'),
+                fileInput: document.getElementById('file-schema'),
+                btnLoad: document.getElementById('btn-load-schema'),
+                btnClear: document.getElementById('btn-clear-schema'),
+                file: null,
+            },
+        };
+
+        function fmt(ms) {
+            if (ms < 1000) return ms.toFixed(0) + 'ms';
+            if (ms < 60000) return (ms / 1000).toFixed(2) + 's';
+            const m = Math.floor(ms / 60000);
+            const s = ((ms % 60000) / 1000).toFixed(1);
+            return m + 'min ' + s + 's';
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+            return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+        }
+
+        function showFile(panel, file) {
+            panel.file = file;
+            panel.badgeName.textContent = file.name;
+            panel.badgeSize.textContent = formatSize(file.size);
+            panel.textarea.style.display = 'none';
+            panel.badge.style.display = 'flex';
+            panel.btnClear.style.display = 'inline-block';
+        }
+
+        function clearFile(panel) {
+            panel.file = null;
+            panel.fileInput.value = '';
+            panel.textarea.style.display = '';
+            panel.badge.style.display = 'none';
+            panel.btnClear.style.display = 'none';
+        }
+
+        function readFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error('Failed to read ' + file.name));
+                reader.readAsText(file);
+            });
+        }
+
+        async function getText(panel) {
+            if (panel.file) return readFile(panel.file);
+            return panel.textarea.value;
+        }
+
+        // PEPHub fetch
+        const pephubInput = document.getElementById('pephub-input');
+        const btnPephub = document.getElementById('btn-pephub');
+
+        btnPephub.addEventListener('click', async () => {
+            const raw = pephubInput.value.trim();
+            if (!raw) return;
+
+            // Parse "namespace/name:tag" or "namespace/name"
+            const match = raw.match(/^([^/]+)\/([^:]+?)(?::(.+))?$/);
+            if (!match) {
+                results.className = 'error';
+                results.textContent = 'Invalid registry path. Use format: namespace/name:tag';
+                return;
+            }
+            const [, ns, name, tag] = match;
+            const tagParam = tag || 'default';
+            const url = `https://pephub-api.databio.org/api/v1/projects/${ns}/${name}?tag=${encodeURIComponent(tagParam)}&raw=true`;
+
+            btnPephub.disabled = true;
+            btnPephub.textContent = 'Fetching...';
+            results.className = '';
+            results.textContent = `Fetching from PEPHub: ${ns}/${name}:${tagParam}...`;
+
+            try {
+                const tFetch = performance.now();
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error(`PEPHub returned ${resp.status}: ${resp.statusText}`);
+                const text = await resp.text();
+                const elapsed = performance.now() - tFetch;
+
+                // Clear any file selection and put the fetched JSON in the textarea
+                clearFile(panels.project);
+                panels.project.textarea.value = text;
+                results.className = 'valid';
+                results.textContent = `Loaded ${ns}/${name}:${tagParam} from PEPHub (${fmt(elapsed)}).`;
+            } catch (e) {
+                results.className = 'error';
+                results.textContent = `PEPHub fetch failed: ${e.message}`;
+            } finally {
+                btnPephub.disabled = false;
+                btnPephub.textContent = 'Fetch';
+            }
+        });
+
+        // Wire up each panel
+        for (const panel of Object.values(panels)) {
+            panel.btnLoad.addEventListener('click', () => panel.fileInput.click());
+            panel.fileInput.addEventListener('change', () => {
+                const file = panel.fileInput.files[0];
+                if (file) showFile(panel, file);
+            });
+            panel.btnClear.addEventListener('click', () => clearFile(panel));
+        }
+
+        // Validate
+        btnValidate.addEventListener('click', async () => {
+            results.className = '';
+            results.textContent = 'Reading inputs...';
+            btnValidate.disabled = true;
+
+            try {
+                const t0 = performance.now();
+
+                const [projectText, schemaText] = await Promise.all([
+                    getText(panels.project),
+                    getText(panels.schema),
+                ]);
+
+                const tRead = performance.now();
+                results.textContent = 'Validating...';
+
+                // Yield to let the UI update before heavy WASM work
+                await new Promise(r => setTimeout(r, 0));
+
+                const project = new WasmProject(projectText);
+                const result = validate(project, schemaText);
+                const tDone = performance.now();
+
+                const timing = `\n\nTiming: ${fmt(tDone - t0)} total (read: ${fmt(tRead - t0)}, validate: ${fmt(tDone - tRead)})`;
+
+                if (result.valid) {
+                    results.className = 'valid';
+                    const name = project.get_name() || '(unnamed)';
+                    const count = project.len();
+                    results.textContent = `Valid!\n\nProject: ${name}\nSamples: ${count}${timing}`;
+                } else {
+                    results.className = 'invalid';
+                    const lines = result.errors.map(e => {
+                        const where = e.sample_name ? `sample '${e.sample_name}'` : 'project';
+                        const path = e.path ? ` at ${e.path}` : '';
+                        return `- [${where}${path}] ${e.message}`;
+                    });
+                    results.textContent = `Validation failed (${result.errors.length} error(s)):\n\n${lines.join('\n')}${timing}`;
+                }
+
+                project.free();
+            } catch (e) {
+                results.className = 'error';
+                results.textContent = `Error: ${e.message || e}`;
+            } finally {
+                btnValidate.disabled = false;
+            }
+        });
+
+        // Init WASM
+        await wasmInit();
+        btnValidate.disabled = false;
+        btnValidate.textContent = 'Validate';
+        results.className = '';
+        results.textContent = 'Ready. Click "Validate" to check your PEP project against the schema.';
+    </script>
+</body>
+</html>
