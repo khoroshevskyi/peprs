@@ -13,7 +13,9 @@ use crate::config::{ImplyCondition, ProjectConfig, SubsampleTable};
 use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX, DEFAULT_SUBSAMPLE_TABLE_INDEX};
 use crate::error::Error;
 use crate::sample::{Sample, SamplesIter};
-use crate::utils::{build_derive_template_expr, extract_template_columns, resolve_csv_to_dataframe};
+use crate::utils::{
+    build_derive_template_expr, extract_template_columns, resolve_csv_to_dataframe,
+};
 #[cfg(feature = "wdl")]
 use crate::wdl::WdlInputParsingOptions;
 #[cfg(feature = "wdl")]
