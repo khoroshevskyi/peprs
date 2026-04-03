@@ -44,30 +44,6 @@ jobs:
           name: wheels-linux-${{ matrix.target }}
           path: ./peprs-py/dist
 
-  #  windows:
-  #    runs-on: windows-latest
-  #    strategy:
-  #      matrix:
-  #        target: [x64, x86]
-  #    steps:
-  #      - uses: actions/checkout@v4
-  #      - uses: actions/setup-python@v5
-  #        with:
-  #          python-version: '3.10'
-  #          architecture: ${{ matrix.target }}
-  #      - name: Build wheels
-  #        uses: PyO3/maturin-action@v1
-  #        with:
-  #          target: ${{ matrix.target }}
-  #          args: --release --out dist --find-interpreter
-  #          sccache: 'true'
-  #          working-directory: ./peprs-py
-  #      - name: Upload wheels
-  #        uses: actions/upload-artifact@v4
-  #        with:
-  #          name: wheels-windows-${{ matrix.target }}
-  #          path: ./peprs-py/dist
-
   macos:
     runs-on: macos-latest
     strategy:
@@ -127,3 +103,28 @@ jobs:
         with:
           command: upload
           args: --non-interactive --skip-existing ./peprs-py/dist/wheels-*/*
+
+
+#  windows:
+#    runs-on: windows-latest
+#    strategy:
+#      matrix:
+#        target: [x64, x86]
+#    steps:
+#      - uses: actions/checkout@v4
+#      - uses: actions/setup-python@v5
+#        with:
+#          python-version: '3.10'
+#          architecture: ${{ matrix.target }}
+#      - name: Build wheels
+#        uses: PyO3/maturin-action@v1
+#        with:
+#          target: ${{ matrix.target }}
+#          args: --release --out dist --find-interpreter
+#          sccache: 'true'
+#          working-directory: ./peprs-py
+#      - name: Upload wheels
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: wheels-windows-${{ matrix.target }}
+#          path: ./peprs-py/dist
