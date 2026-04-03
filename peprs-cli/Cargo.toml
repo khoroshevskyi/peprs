@@ -13,9 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4.5.48", features = ["derive"] }
-tokio = "1.48.0"
-
 # peprs core code
-peprs-core = { path = "../peprs-core", features = ["wdl"] }
+peprs-core = { path = "../peprs-core" }
 peprs-eido = { path = "../peprs-eido" }
 serde_json.workspace = true

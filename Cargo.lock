@@ -3226,7 +3226,6 @@ dependencies = [
  "peprs-core",
  "peprs-eido",
  "serde_json",
- "tokio",
 ]
 
 [[package]]
