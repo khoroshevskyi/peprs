@@ -3246,6 +3246,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "ureq",
  "wdl",
  "zip",
 ]
@@ -3725,7 +3726,6 @@ dependencies = [
  "bitflags 2.9.4",
  "chrono",
  "either",
- "futures",
  "memchr",
  "polars-arrow",
  "polars-compute",
@@ -3740,7 +3740,6 @@ dependencies = [
  "polars-time",
  "polars-utils",
  "rayon",
- "tokio",
  "version_check",
 ]
 
@@ -3750,7 +3749,6 @@ version = "0.51.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20a856e98e253587c28d8132a5e7e5a75cb2c44731ca090f1481d45f1d123771"
 dependencies = [
- "futures",
  "memmap2",
  "polars-arrow",
  "polars-core",
@@ -3764,7 +3762,6 @@ dependencies = [
  "polars-utils",
  "rayon",
  "recursive",
- "tokio",
 ]
 
 [[package]]
@@ -3845,7 +3842,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "either",
- "futures",
  "hashbrown 0.15.5",
  "memmap2",
  "num-traits",
