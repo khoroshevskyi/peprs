@@ -10,8 +10,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = "0.25.0"
-openssl = { version = "0.10", features = ["vendored"] }
-openssl-src = { workspace = true }
 pephub-client = { path = "../pephub-client", version = "0.1.0" }
 pyo3-polars = "0.24.0"
 pythonize = "0.25.0"
