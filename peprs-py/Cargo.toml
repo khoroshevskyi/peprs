@@ -10,13 +10,14 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = "0.25.0"
-peprs-core = { path = "../peprs-core", version = "0.1.0" }
-peprs-eido = { path = "../peprs-eido", version = "0.1.0" }
-peprs-cli = { path = "../peprs-cli" }
+openssl = { version = "0.10", features = ["vendored"] }
 pephub-client = { path = "../pephub-client", version = "0.1.0" }
 pyo3-polars = "0.24.0"
 pythonize = "0.25.0"
 polars = { version = "0.51.0" }
 serde_json = "1.0.145"
 
-openssl = { version = "0.10", features = ["vendored"] }
+
+peprs-core = { path = "../peprs-core", version = "0.1.0" }
+peprs-eido = { path = "../peprs-eido", version = "0.1.0" }
+peprs-cli = { path = "../peprs-cli" }
