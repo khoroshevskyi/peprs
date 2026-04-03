@@ -35,7 +35,7 @@ jobs:
           sccache: 'true'
           manylinux: manylinux_2_28
           before-script-linux: |
-            yum install -y perl-IPC-Cmd
+            yum install -y perl-IPC-Cmd perl-Time-Piece perl-FindBin
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
