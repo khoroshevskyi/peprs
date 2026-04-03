@@ -89,7 +89,7 @@ jobs:
     environment: release
     permissions:
       id-token: write
-    needs: [linux, windows, macos, sdist]
+    needs: [linux, macos, sdist]
     steps:
       - uses: actions/download-artifact@v4
         with:
