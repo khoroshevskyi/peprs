@@ -15,3 +15,5 @@ serde_json = "1.0.145"
 thiserror = "2.0.16"
 tracing = "0.1.44"
 
+# Pin openssl-src to 3.5.4 to avoid assembler bug in 3.5.5 with manylinux cross containers
+openssl-src = "=300.5.4"
