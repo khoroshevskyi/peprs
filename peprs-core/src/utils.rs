@@ -108,24 +108,33 @@ pub fn resolve_csv_to_dataframe(path: &Path) -> Result<DataFrame, Error> {
         return Ok(df);
     }
 
-    let url = path
-        .to_str()
-        .ok_or_else(|| Error::config("Invalid UTF-8 in CSV path"))?;
-    let mut response = ureq::get(url)
-        .call()
-        .map_err(|e| Error::config(format!("Failed to fetch CSV from '{url}': {e}")))?;
+    #[cfg(feature = "native")]
+    {
+        let url = path
+            .to_str()
+            .ok_or_else(|| Error::config("Invalid UTF-8 in CSV path"))?;
+        let mut response = ureq::get(url)
+            .call()
+            .map_err(|e| Error::config(format!("Failed to fetch CSV from '{url}': {e}")))?;
 
-    let bytes = response
-        .body_mut()
-        .read_to_vec()
-        .map_err(|e| Error::config(format!("Failed to read response from '{url}': {e}")))?;
+        let bytes = response
+            .body_mut()
+            .read_to_vec()
+            .map_err(|e| Error::config(format!("Failed to read response from '{url}': {e}")))?;
 
-    let cursor = Cursor::new(bytes);
-    let df = CsvReadOptions::default()
-        .with_has_header(true)
-        .with_infer_schema_length(Some(10_000))
-        .into_reader_with_file_handle(cursor)
-        .finish()?;
+        let cursor = Cursor::new(bytes);
+        let df = CsvReadOptions::default()
+            .with_has_header(true)
+            .with_infer_schema_length(Some(10_000))
+            .into_reader_with_file_handle(cursor)
+            .finish()?;
 
-    Ok(df)
+        return Ok(df);
+    }
+
+    #[cfg(not(feature = "native"))]
+    Err(Error::config(format!(
+        "File not found: '{}' (URL fetching not available without 'native' feature)",
+        path.display()
+    )))
 }

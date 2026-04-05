@@ -29,6 +29,13 @@ class TestProjectConstructor:
         assert isinstance(p, Project)
         assert len(p) > 0
 
+    def test_csv_url(self):
+        """Verify that a remote CSV URL can be used to initialize a project."""
+        url = "https://raw.githubusercontent.com/pepkit/peppy/refs/heads/master/example_peps-cfg2/example_basic/sample_table.csv"
+        p = Project(url)
+        assert isinstance(p, Project)
+        assert len(p) > 0
+
     @pytest.mark.parametrize("example_pep_cfg_path", ["amendments1"], indirect=True)
     def test_amendments(self, example_pep_cfg_path):
         """Verify that amendments are applied at construction."""

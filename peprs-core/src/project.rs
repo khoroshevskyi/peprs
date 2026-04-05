@@ -581,7 +581,7 @@ impl Project {
     /// * `path` - Destination folder path (created if missing).
     ///
     pub fn write_raw_folder<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
-        let project_name = self.get_name().unwrap_or("default_name".to_string());
+        // let project_name = self.get_name().unwrap_or("default_name".to_string());
 
         let folder = path.as_ref();
         std::fs::create_dir_all(&folder)?;
