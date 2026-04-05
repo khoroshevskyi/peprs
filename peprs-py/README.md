@@ -1,4 +1,5 @@
-peprs` - A spicy 🌶️ library for managing biological sample metadata to enable reproducible and scalable bioinformatics
+# peprs
+A spicy 🌶️ library for managing biological sample metadata to enable reproducible and scalable bioinformatics
 
 Don't let sample metadata parsing bottleneck your pipelines!
 
