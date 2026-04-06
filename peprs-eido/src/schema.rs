@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use serde_json::Value;
-use tracing::warn;
 
 use crate::error::{EidoError, Result};
 
@@ -26,10 +25,14 @@ pub struct EidoSchema {
     pub imports: Vec<EidoSchema>,
 }
 
-/// Load an eido schema from a file path (YAML or JSON).
+/// Load an eido schema from a file path or URL (YAML or JSON).
 pub fn load_schema(path: &str) -> Result<EidoSchema> {
-    let path = Path::new(path);
-    load_schema_from_path(path)
+    if is_url(path) {
+        load_schema_from_url(path)
+    } else {
+        let path = Path::new(path);
+        load_schema_from_path(path)
+    }
 }
 
 /// Load an eido schema from a `serde_json::Value`.
@@ -46,6 +49,36 @@ fn load_schema_from_path(path: &Path) -> Result<EidoSchema> {
         serde_yaml::from_str(&content)?
     };
     build_schema(value, path.parent())
+}
+
+fn is_url(path: &str) -> bool {
+    path.starts_with("http://") || path.starts_with("https://")
+}
+
+#[cfg(feature = "native")]
+fn fetch_url_content(url: &str) -> Result<String> {
+    let mut response = ureq::get(url)
+        .call()
+        .map_err(|e| EidoError::SchemaLoad(format!("Failed to fetch schema from {url}: {e}")))?;
+    let body = response
+        .body_mut()
+        .read_to_string()
+        .map_err(|e| EidoError::SchemaLoad(format!("Failed to read response from {url}: {e}")))?;
+    Ok(body)
+}
+
+#[cfg(not(feature = "native"))]
+fn fetch_url_content(url: &str) -> Result<String> {
+    Err(EidoError::SchemaLoad(format!(
+        "URL schema loading requires the 'native' feature: {url}"
+    )))
+}
+
+fn load_schema_from_url(url: &str) -> Result<EidoSchema> {
+    let content = fetch_url_content(url)?;
+    // Parse as YAML (superset of JSON, handles both)
+    let value: Value = serde_yaml::from_str(&content)?;
+    build_schema(value, None)
 }
 
 fn build_schema(raw: Value, base_dir: Option<&Path>) -> Result<EidoSchema> {
@@ -85,22 +118,16 @@ fn resolve_imports(schema: &Value, base_dir: Option<&Path>) -> Result<Vec<EidoSc
             EidoError::SchemaLoad(format!("import entry must be a string, got: {import_val}"))
         })?;
 
-        // Skip URL imports for now — only support local files
-        if import_path_str.starts_with("http://") || import_path_str.starts_with("https://") {
-            warn!(
-                path = import_path_str,
-                "URL schema imports are not yet supported, skipping"
-            );
-            continue;
-        }
-
-        let import_path = if let Some(base) = base_dir {
-            base.join(import_path_str)
+        if is_url(import_path_str) {
+            resolved.push(load_schema_from_url(import_path_str)?);
         } else {
-            import_path_str.into()
-        };
-
-        resolved.push(load_schema_from_path(&import_path)?);
+            let import_path = if let Some(base) = base_dir {
+                base.join(import_path_str)
+            } else {
+                import_path_str.into()
+            };
+            resolved.push(load_schema_from_path(&import_path)?);
+        }
     }
 
     Ok(resolved)
