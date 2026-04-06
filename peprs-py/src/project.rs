@@ -294,7 +294,7 @@ impl PyProject {
         if raw == true {
             // --- config ---
             let cfg_object: Option<Value> = match &self.inner.config {
-                Some(config) => config.raw.clone(),
+                Some(config) => config.get_raw_config(None, None).clone(),
                 None => None,
             };
             let cfg_py_object = pythonize(py, &cfg_object.unwrap_or_default())
