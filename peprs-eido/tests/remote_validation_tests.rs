@@ -16,26 +16,23 @@ fn load_project(name: &str) -> Project {
 }
 
 /// Python: TestRemoteValidation.test_validate_works_with_remote_schemas
-/// Remote schema URL loading is not yet supported in peprs-eido.
 #[test]
-#[ignore = "remote schema loading not yet supported"]
 fn test_validate_works_with_remote_schema() {
-    let _project = load_project("test_pep");
-    // When implemented: load schema from http://schema.databio.org/pep/2.0.0.yaml
-    // then validate project, config, and samples against it.
-    todo!("Implement remote schema loading");
+    let project = load_project("test_pep");
+    let schema_url = "http://schema.databio.org/pep/2.0.0.yaml";
+    peprs_eido::validate(&project, schema_url).expect("Validation with remote schema failed");
 }
 
-/// Schemas with remote URL imports are loaded but remote imports are skipped with a warning.
-/// Validation still works using the local schema content.
+/// Schemas with remote URL imports resolve the imported schema.
 #[test]
-fn test_schema_with_remote_import_skips_url() {
+fn test_schema_with_remote_import_resolves_url() {
     let schema = peprs_eido::load_schema(&test_schema_path("test_schema_imports.yaml"))
         .expect("Failed to load schema");
-    // Remote URL import should be skipped, so imports list is empty
-    assert!(
-        schema.imports.is_empty(),
-        "Remote URL imports should be skipped, got {} imports",
+    // Remote URL import should be resolved
+    assert_eq!(
+        schema.imports.len(),
+        1,
+        "Remote URL import should be resolved, got {} imports",
         schema.imports.len()
     );
     // The local schema content should still be parsed

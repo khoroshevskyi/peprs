@@ -5,15 +5,18 @@ members = [
     "peprs-core",
     "peprs-eido",
     "peprs-py",
-    "peprs-cli", "pephub-client",
+    "peprs-cli",
+    "pephub-client",
+]
+exclude = [
+    "peprs-wasm",
 ]
 [workspace.dependencies]
-polars = { version = "0.51.0", features = ["lazy", "is_in", "replace", "strings", "concat_str", "json", "cloud"]}
+polars = { version = "0.51.0", default-features = false, features = ["lazy", "is_in", "replace", "strings", "concat_str", "dtype-full", "polars-ops", "zip_with"]}
+polars-io = { version = "0.51.0", default-features = false }
+polars-lazy = { version = "0.51.0", default-features = false }
 serde = { version = "1.0.226", features = ["derive"] }
 serde_yaml = "0.9.34"
 serde_json = "1.0.145"
 thiserror = "2.0.16"
 tracing = "0.1.44"
-
-# Pin openssl-src to 3.5.4 to avoid assembler bug in 3.5.5 with manylinux cross containers
-openssl-src = "=300.5.4"

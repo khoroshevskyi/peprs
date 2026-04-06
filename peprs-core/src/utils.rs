@@ -1,8 +1,12 @@
+use std::io::Cursor;
+use std::path::Path;
 use std::sync::LazyLock;
 
 use polars::prelude::*;
 use regex::Regex;
 use serde_json::Value;
+
+use crate::error::Error;
 
 /// Convert a Polars `AnyValue` into a `serde_json::Value`, preserving type information.
 pub fn any_value_to_json(any_value: AnyValue) -> Value {
@@ -91,4 +95,46 @@ pub fn extract_template_columns(template: &str) -> Vec<String> {
         .captures_iter(template)
         .map(|cap| cap.get(1).unwrap().as_str().to_string())
         .collect()
+}
+
+/// Resolve a CSV path: try local file first, then fetch as URL via ureq.
+pub fn resolve_csv_to_dataframe(path: &Path) -> Result<DataFrame, Error> {
+    if path.exists() {
+        let df = LazyCsvReader::new(PlPath::new(path.to_str().unwrap()))
+            .with_has_header(true)
+            .with_infer_schema_length(Some(10_000))
+            .finish()?
+            .collect()?;
+        return Ok(df);
+    }
+
+    #[cfg(feature = "native")]
+    {
+        let url = path
+            .to_str()
+            .ok_or_else(|| Error::config("Invalid UTF-8 in CSV path"))?;
+        let mut response = ureq::get(url)
+            .call()
+            .map_err(|e| Error::config(format!("Failed to fetch CSV from '{url}': {e}")))?;
+
+        let bytes = response
+            .body_mut()
+            .read_to_vec()
+            .map_err(|e| Error::config(format!("Failed to read response from '{url}': {e}")))?;
+
+        let cursor = Cursor::new(bytes);
+        let df = CsvReadOptions::default()
+            .with_has_header(true)
+            .with_infer_schema_length(Some(10_000))
+            .into_reader_with_file_handle(cursor)
+            .finish()?;
+
+        return Ok(df);
+    }
+
+    #[cfg(not(feature = "native"))]
+    Err(Error::config(format!(
+        "File not found: '{}' (URL fetching not available without 'native' feature)",
+        path.display()
+    )))
 }

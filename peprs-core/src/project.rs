@@ -13,7 +13,9 @@ use crate::config::{ImplyCondition, ProjectConfig, SubsampleTable};
 use crate::consts::{self, DEFAULT_SAMPLE_TABLE_INDEX, DEFAULT_SUBSAMPLE_TABLE_INDEX};
 use crate::error::Error;
 use crate::sample::{Sample, SamplesIter};
-use crate::utils::{build_derive_template_expr, extract_template_columns};
+use crate::utils::{
+    build_derive_template_expr, extract_template_columns, resolve_csv_to_dataframe,
+};
 #[cfg(feature = "wdl")]
 use crate::wdl::WdlInputParsingOptions;
 #[cfg(feature = "wdl")]
@@ -149,10 +151,8 @@ impl ProjectBuilder {
                     .sample_table_index
                     .unwrap_or_else(|| DEFAULT_SAMPLE_TABLE_INDEX.to_string());
 
-                let df = LazyCsvReader::new(PlPath::new(csv.to_str().unwrap()))
-                    .with_has_header(true)
-                    .with_infer_schema_length(Some(10_000))
-                    .finish()?
+                let df = resolve_csv_to_dataframe(&csv)?
+                    .lazy()
                     .with_column(col(final_index.clone()).cast(DataType::String))
                     .collect()?;
 
@@ -565,7 +565,10 @@ impl Project {
         let zipped = zipped.unwrap_or(false);
 
         match zipped {
+            #[cfg(feature = "zip")]
             true => self.write_raw_zip(path),
+            #[cfg(not(feature = "zip"))]
+            true => Err(Error::Processing("zip feature not enabled".to_string())),
             false => self.write_raw_folder(path),
         }
     }
@@ -578,7 +581,7 @@ impl Project {
     /// * `path` - Destination folder path (created if missing).
     ///
     pub fn write_raw_folder<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
-        let project_name = self.get_name().unwrap_or("default_name".to_string());
+        // let project_name = self.get_name().unwrap_or("default_name".to_string());
 
         let folder = path.as_ref();
         std::fs::create_dir_all(&folder)?;
@@ -628,6 +631,7 @@ impl Project {
     ///
     /// * `path` - Destination zip file path.
     ///
+    #[cfg(feature = "zip")]
     pub fn write_raw_zip<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
         use ::zip::write::SimpleFileOptions;
         use ::zip::{CompressionMethod, ZipWriter};
@@ -1366,6 +1370,15 @@ mod tests {
     fn pep_from_csv(basic_csv: &'static str) {
         let proj = Project::from_csv(basic_csv);
         assert_eq!(proj.is_ok(), true);
+    }
+
+    #[test]
+    fn pep_from_csv_url() {
+        let url = "https://raw.githubusercontent.com/pepkit/peppy/refs/heads/master/example_peps-cfg2/example_basic/sample_table.csv";
+        let proj = Project::from_csv(url).unwrap().build();
+        assert!(proj.is_ok());
+        let proj = proj.unwrap();
+        assert!(proj.len() > 0);
     }
 
     #[rstest]

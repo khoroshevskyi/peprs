@@ -797,9 +797,9 @@ dependencies = [
 
 [[package]]
 name = "comfy-table"
-version = "7.2.1"
+version = "7.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b03b7db8e0b4b2fdad6c551e634134e99ec000e5c8c3b6856c65e8bbaded7a3b"
+checksum = "958c5d6ecf1f214b4c2bbbbf6ab9523a864bd136dcf71a7e8904799acfe1ad47"
 dependencies = [
  "crossterm",
  "unicode-segmentation",
@@ -2480,17 +2480,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jsonpath_lib_polars_vendor"
-version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4bd9354947622f7471ff713eacaabdb683ccb13bba4edccaab9860abf480b7d"
-dependencies = [
- "log",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "jsonschema"
 version = "0.29.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2509,7 +2498,6 @@ dependencies = [
  "percent-encoding",
  "referencing",
  "regex-syntax",
- "reqwest",
  "serde",
  "serde_json",
  "uuid-simd",
@@ -3108,15 +3096,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d05e27ee213611ffe7d6348b942e8f942b37114c00cc03cec254295a4a17852e"
 
 [[package]]
-name = "openssl-src"
-version = "300.5.4+3.5.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a507b3792995dae9b0df8a1c1e3771e8418b7c2d9f0baeba32e6fe8b06c7cb72"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "openssl-sys"
 version = "0.9.110"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3124,7 +3103,6 @@ checksum = "0a9f0075ba3c21b09f8e8b2026584b1d18d49388648f2fbbf3c97ea8deced8e2"
 dependencies = [
  "cc",
  "libc",
- "openssl-src",
  "pkg-config",
  "vcpkg",
 ]
@@ -3248,7 +3226,6 @@ dependencies = [
  "peprs-core",
  "peprs-eido",
  "serde_json",
- "tokio",
 ]
 
 [[package]]
@@ -3256,6 +3233,8 @@ name = "peprs-core"
 version = "0.1.0"
 dependencies = [
  "polars",
+ "polars-io",
+ "polars-lazy",
  "pretty_assertions",
  "regex",
  "rstest",
@@ -3266,6 +3245,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "ureq",
  "wdl",
  "zip",
 ]
@@ -3285,14 +3265,13 @@ dependencies = [
  "serde_yaml",
  "thiserror 2.0.17",
  "tracing",
+ "ureq",
 ]
 
 [[package]]
 name = "peprs-py"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
- "openssl",
- "openssl-src",
  "pephub-client",
  "peprs-cli",
  "peprs-core",
@@ -3497,7 +3476,6 @@ dependencies = [
  "polars-io",
  "polars-lazy",
  "polars-ops",
- "polars-parquet",
  "polars-plan",
  "polars-sql",
  "polars-time",
@@ -3747,7 +3725,6 @@ dependencies = [
  "bitflags 2.9.4",
  "chrono",
  "either",
- "futures",
  "memchr",
  "polars-arrow",
  "polars-compute",
@@ -3762,7 +3739,6 @@ dependencies = [
  "polars-time",
  "polars-utils",
  "rayon",
- "tokio",
  "version_check",
 ]
 
@@ -3772,7 +3748,6 @@ version = "0.51.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20a856e98e253587c28d8132a5e7e5a75cb2c44731ca090f1481d45f1d123771"
 dependencies = [
- "futures",
  "memmap2",
  "polars-arrow",
  "polars-core",
@@ -3786,7 +3761,6 @@ dependencies = [
  "polars-utils",
  "rayon",
  "recursive",
- "tokio",
 ]
 
 [[package]]
@@ -3804,7 +3778,6 @@ dependencies = [
  "hashbrown 0.15.5",
  "hex",
  "indexmap 2.12.0",
- "jsonpath_lib_polars_vendor",
  "libm",
  "memchr",
  "num-traits",
@@ -3812,13 +3785,11 @@ dependencies = [
  "polars-compute",
  "polars-core",
  "polars-error",
- "polars-json",
  "polars-schema",
  "polars-utils",
  "rayon",
  "regex",
  "regex-syntax",
- "serde_json",
  "strum_macros",
  "unicode-normalization",
  "unicode-reverse",
@@ -3870,7 +3841,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "either",
- "futures",
  "hashbrown 0.15.5",
  "memmap2",
  "num-traits",
@@ -4580,7 +4550,6 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "encoding_rs",
- "futures-channel",
  "futures-core",
  "futures-util",
  "h2",

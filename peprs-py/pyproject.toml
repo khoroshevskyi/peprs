@@ -4,7 +4,11 @@ build-backend = "maturin"
 
 [project]
 name = "peprs"
+description = "Rust-powered PEP sample metadata toolkit for Python"
 requires-python = ">=3.10"
+license = "MIT"
+
+keywords = ["pep", "bioinformatics", "metadata", "samples"]
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
@@ -14,7 +18,10 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
+readme = "README.md"
 dynamic = ["version"]
 
 [project.scripts]

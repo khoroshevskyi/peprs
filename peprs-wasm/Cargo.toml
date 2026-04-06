@@ -1,0 +1,23 @@
+[package]
+name = "peprs-wasm"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+peprs-core = { path = "../peprs-core", default-features = false, features = ["csv", "json"] }
+peprs-eido = { path = "../peprs-eido", default-features = false }
+wasm-bindgen = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde-wasm-bindgen = "0.6"
+getrandom = { version = "0.2", features = ["js"] }
+console_error_panic_hook = "0.1"
+polars = { version = "0.51.0", default-features = false, features = ["lazy", "is_in", "replace", "strings", "concat_str", "dtype-full", "polars-ops", "zip_with"] }
+polars-io = { version = "0.51.0", default-features = false, features = ["json", "csv"] }
+jsonschema = { version = "0.29", default-features = false }
+
+[profile.release]
+opt-level = "s"
