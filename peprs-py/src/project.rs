@@ -580,8 +580,8 @@ impl PyProject {
     ///
     /// An iterator yielding each sample as a Python dict.
     ///
-    #[getter]
-    fn samples(slf: Py<Self>, py: Python<'_>) -> PyResult<Py<PySamplesIter>> {
+    #[getter(samples)]
+    fn py_samples_iter(slf: Py<Self>, py: Python<'_>) -> PyResult<Py<PySamplesIter>> {
         Py::new(
             py,
             PySamplesIter {
@@ -613,6 +613,43 @@ impl PyProject {
             },
             Err(err) => Err(PyRuntimeError::new_err(err.to_string())),
         }
+    }
+
+    ///
+    /// Look up multiple samples by name.
+    ///
+    /// # Arguments
+    ///
+    /// * `names` - A sample name (str) or list of sample names to look up.
+    ///
+    /// # Returns
+    ///
+    /// A list of `Sample` objects for the matching samples. Names not found
+    /// in the sample table are silently skipped.
+    ///
+    /// # Examples
+    ///
+    /// ```python
+    /// samples = project.get_samples(["frog_1", "frog_2"])
+    /// sample = project.get_samples("frog_1")
+    /// ```
+    #[pyo3(signature = (names))]
+    pub fn get_samples(&self, py: Python<'_>, names: PyObject) -> PyResult<Vec<PySample>> {
+        let name_strings: Vec<String> = if let Ok(s) = names.extract::<String>(py) {
+            vec![s]
+        } else if let Ok(v) = names.extract::<Vec<String>>(py) {
+            v
+        } else {
+            return Err(PyValueError::new_err(
+                "names must be a string or list of strings",
+            ));
+        };
+        let name_refs: Vec<&str> = name_strings.iter().map(|s| s.as_str()).collect();
+        let samples = self
+            .inner
+            .get_samples(name_refs)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(samples.iter().map(|s| sample_to_pysample(py, s)).collect())
     }
 
     ///

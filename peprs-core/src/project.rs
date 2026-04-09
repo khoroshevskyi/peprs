@@ -431,8 +431,14 @@ impl Project {
     ///
     /// `Some(Sample)` if found, `None` if no match.
     ///
-    pub fn get_samples<'a>(&'a self, names: Vec<&str>) -> PolarsResult<Option<Sample<'a>>> {
-        panic!("get_samples not implemented yet!")
+    pub fn get_samples<'a>(&'a self, names: Vec<&str>) -> PolarsResult<Vec<Sample<'a>>> {
+        let mut results = Vec::with_capacity(names.len());
+        for name in names {
+            if let Some(sample) = self.get_sample(name)? {
+                results.push(sample);
+            }
+        }
+        Ok(results)
     }
 
     ///
@@ -1806,5 +1812,31 @@ mod tests {
         assert_eq!(frog2.len(), 1);
         let frog2_val = frog2.str().unwrap().get(0).unwrap();
         assert_eq!(frog2_val, "../data/frog2*_data.txt");
+    }
+
+    #[rstest]
+    fn test_get_samples(basic_pep: &'static str) {
+        let proj = Project::from_config(basic_pep).build().unwrap();
+
+        let samples = proj.get_samples(vec!["frog_1", "frog_2"]).unwrap();
+        assert_eq!(samples.len(), 2);
+        assert_eq!(samples[0].get("sample_name").unwrap().to_string(), r#""frog_1""#);
+        assert_eq!(samples[1].get("sample_name").unwrap().to_string(), r#""frog_2""#);
+    }
+
+    #[rstest]
+    fn test_get_samples_with_missing(basic_pep: &'static str) {
+        let proj = Project::from_config(basic_pep).build().unwrap();
+
+        let samples = proj.get_samples(vec!["frog_1", "nonexistent"]).unwrap();
+        assert_eq!(samples.len(), 1);
+    }
+
+    #[rstest]
+    fn test_get_samples_empty(basic_pep: &'static str) {
+        let proj = Project::from_config(basic_pep).build().unwrap();
+
+        let samples = proj.get_samples(vec![]).unwrap();
+        assert_eq!(samples.len(), 0);
     }
 }
