@@ -530,6 +530,14 @@ impl PyProject {
     }
 
     ///
+    /// Get the sample table index column name.
+    ///
+    #[getter]
+    pub fn get_sample_name_colname(&self) -> &str {
+        &self.inner.sample_table_index
+    }
+
+    ///
     /// Set the project description.
     ///
     /// # Arguments

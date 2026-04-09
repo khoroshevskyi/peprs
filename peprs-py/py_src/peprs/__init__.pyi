@@ -75,6 +75,9 @@ class Project:
     pep_version: str
     """PEP specification version string."""
 
+    sample_name_colname: str
+    """Column name used as the sample table index (default: "sample_name")."""
+
     config: Optional[Dict[str, Any]]
     """Raw project configuration as a dictionary, or None if no config exists."""
 
