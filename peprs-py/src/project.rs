@@ -142,6 +142,33 @@ impl PyProject {
     }
 
     ///
+    /// Create a Project from a YAML file containing raw sample data.
+    ///
+    /// # Arguments
+    ///
+    /// * `yaml_file` - Path to a YAML file with sample records.
+    /// * `sample_table_index` - Optional column name for the sample index.
+    ///
+    /// # Returns
+    ///
+    /// A new `PyProject`.
+    ///
+    #[classmethod]
+    #[pyo3(signature = (yaml_file, sample_table_index=None))]
+    pub fn from_sample_yaml(
+        _cls: &Bound<'_, PyType>,
+        yaml_file: String,
+        sample_table_index: Option<String>,
+    ) -> Result<Self, PeprsCoreError> {
+        let mut builder = Project::from_sample_yaml(&yaml_file);
+        if let Some(idx) = sample_table_index {
+            builder = builder.with_sample_table_index(idx);
+        }
+        let inner = builder.build()?;
+        Ok(PyProject { inner })
+    }
+
+    ///
     /// Create a Project from a Python dict with `config`, `samples`, and optional `subsamples` keys.
     ///
     /// # Arguments

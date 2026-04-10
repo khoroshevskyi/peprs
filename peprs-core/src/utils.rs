@@ -97,6 +97,20 @@ pub fn extract_template_columns(template: &str) -> Vec<String> {
         .collect()
 }
 
+/// Read a YAML file containing sample data and convert it to a DataFrame.
+/// Supports both list-of-dicts and dict-of-lists YAML structures.
+pub fn resolve_yaml_to_dataframe(path: &Path) -> Result<DataFrame, Error> {
+    let file = std::fs::File::open(path)
+        .map_err(|e| Error::config(format!("Failed to open YAML file '{}': {e}", path.display())))?;
+    let value: Value = serde_yaml::from_reader(file)
+        .map_err(|e| Error::config(format!("Failed to parse YAML file '{}': {e}", path.display())))?;
+    let json_str = value.to_string();
+    let df = JsonReader::new(Cursor::new(json_str.as_bytes()))
+        .finish()
+        .map_err(|e| Error::config(format!("Failed to convert YAML to DataFrame: {e}")))?;
+    Ok(df)
+}
+
 /// Resolve a CSV path: try local file first, then fetch as URL via ureq.
 pub fn resolve_csv_to_dataframe(path: &Path) -> Result<DataFrame, Error> {
     if path.exists() {

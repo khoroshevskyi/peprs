@@ -15,6 +15,7 @@ use crate::error::Error;
 use crate::sample::{Sample, SamplesIter};
 use crate::utils::{
     build_derive_template_expr, extract_template_columns, resolve_csv_to_dataframe,
+    resolve_yaml_to_dataframe,
 };
 #[cfg(feature = "wdl")]
 use crate::wdl::WdlInputParsingOptions;
@@ -28,6 +29,7 @@ use serde_json::Value;
 enum ProjectSource {
     Path(PathBuf),
     CSV(PathBuf),
+    SampleYAML(PathBuf),
     DataFrame(DataFrame),
     InMemory {
         config: ProjectConfig,
@@ -164,6 +166,21 @@ impl ProjectBuilder {
                 }
                 .build()
             }
+            ProjectSource::SampleYAML(yaml_path) => {
+                let final_index = self
+                    .sample_table_index
+                    .unwrap_or_else(|| DEFAULT_SAMPLE_TABLE_INDEX.to_string());
+
+                let df = resolve_yaml_to_dataframe(&yaml_path)?;
+
+                Self {
+                    source: ProjectSource::DataFrame(df),
+                    amendments: None,
+                    sample_table_index: Some(final_index),
+                    subsample_table_index: self.subsample_table_index,
+                }
+                .build()
+            }
             ProjectSource::DataFrame(df) => {
                 let index = self
                     .sample_table_index
@@ -220,6 +237,28 @@ impl Project {
             sample_table_index: None,
             subsample_table_index: None,
         })
+    }
+
+    ///
+    /// Create a project from a YAML file containing sample data.
+    /// Unlike `from_config`, this expects the YAML to contain raw sample records
+    /// (list-of-dicts or dict-of-lists), not a PEP project configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the YAML sample file.
+    ///
+    /// # Returns
+    ///
+    /// A [`ProjectBuilder`] targeting the given YAML sample file.
+    ///
+    pub fn from_sample_yaml<P: AsRef<Path>>(path: P) -> ProjectBuilder {
+        ProjectBuilder {
+            source: ProjectSource::SampleYAML(path.as_ref().to_path_buf()),
+            amendments: None,
+            sample_table_index: None,
+            subsample_table_index: None,
+        }
     }
 
     ///
@@ -1838,5 +1877,33 @@ mod tests {
 
         let samples = proj.get_samples(vec![]).unwrap();
         assert_eq!(samples.len(), 0);
+    }
+
+    #[fixture]
+    fn basic_sample_yaml() -> &'static str {
+        "../example-peps/example_basic/samples.yaml"
+    }
+
+    #[rstest]
+    fn test_from_sample_yaml(basic_sample_yaml: &'static str) {
+        let proj = Project::from_sample_yaml(basic_sample_yaml).build().unwrap();
+        assert_eq!(proj.len(), 2);
+        let sample = proj.get_sample("frog_1").unwrap().unwrap();
+        assert_eq!(*sample.get("protocol").unwrap(), AnyValue::String("anySampleType"));
+    }
+
+    #[rstest]
+    fn test_from_sample_yaml_with_index(basic_sample_yaml: &'static str) {
+        let proj = Project::from_sample_yaml(basic_sample_yaml)
+            .with_sample_table_index("sample_name".to_string())
+            .build()
+            .unwrap();
+        assert_eq!(proj.len(), 2);
+    }
+
+    #[test]
+    fn test_from_sample_yaml_nonexistent() {
+        let result = Project::from_sample_yaml("nonexistent.yaml").build();
+        assert!(result.is_err());
     }
 }
