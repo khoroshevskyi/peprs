@@ -112,10 +112,18 @@ pub fn extract_template_columns(template: &str) -> Vec<String> {
 /// Read a YAML file containing sample data and convert it to a DataFrame.
 /// Supports both list-of-dicts and dict-of-lists YAML structures.
 pub fn resolve_yaml_to_dataframe(path: &Path) -> Result<DataFrame, Error> {
-    let file = std::fs::File::open(path)
-        .map_err(|e| Error::config(format!("Failed to open YAML file '{}': {e}", path.display())))?;
-    let value: Value = serde_yaml::from_reader(file)
-        .map_err(|e| Error::config(format!("Failed to parse YAML file '{}': {e}", path.display())))?;
+    let file = std::fs::File::open(path).map_err(|e| {
+        Error::config(format!(
+            "Failed to open YAML file '{}': {e}",
+            path.display()
+        ))
+    })?;
+    let value: Value = serde_yaml::from_reader(file).map_err(|e| {
+        Error::config(format!(
+            "Failed to parse YAML file '{}': {e}",
+            path.display()
+        ))
+    })?;
     let json_str = value.to_string();
     let df = JsonReader::new(Cursor::new(json_str.as_bytes()))
         .finish()
@@ -177,8 +185,8 @@ mod tests {
             std::env::remove_var(missing);
         }
         let template = format!("/prefix/${{{}}}/{{sample_name}}.bam", missing);
-        let expr = build_derive_template_expr(&template)
-            .expect("missing env var should warn, not error");
+        let expr =
+            build_derive_template_expr(&template).expect("missing env var should warn, not error");
         // missing env vars are substituted with empty string, so the unresolved
         // name must NOT appear as a column reference in the resulting expression.
         let debug = format!("{:?}", expr);

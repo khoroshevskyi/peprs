@@ -1859,8 +1859,14 @@ mod tests {
 
         let samples = proj.get_samples(vec!["frog_1", "frog_2"]).unwrap();
         assert_eq!(samples.len(), 2);
-        assert_eq!(samples[0].get("sample_name").unwrap().to_string(), r#""frog_1""#);
-        assert_eq!(samples[1].get("sample_name").unwrap().to_string(), r#""frog_2""#);
+        assert_eq!(
+            samples[0].get("sample_name").unwrap().to_string(),
+            r#""frog_1""#
+        );
+        assert_eq!(
+            samples[1].get("sample_name").unwrap().to_string(),
+            r#""frog_2""#
+        );
     }
 
     #[rstest]
@@ -1886,10 +1892,15 @@ mod tests {
 
     #[rstest]
     fn test_from_sample_yaml(basic_sample_yaml: &'static str) {
-        let proj = Project::from_sample_yaml(basic_sample_yaml).build().unwrap();
+        let proj = Project::from_sample_yaml(basic_sample_yaml)
+            .build()
+            .unwrap();
         assert_eq!(proj.len(), 2);
         let sample = proj.get_sample("frog_1").unwrap().unwrap();
-        assert_eq!(*sample.get("protocol").unwrap(), AnyValue::String("anySampleType"));
+        assert_eq!(
+            *sample.get("protocol").unwrap(),
+            AnyValue::String("anySampleType")
+        );
     }
 
     #[rstest]

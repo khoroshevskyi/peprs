@@ -38,9 +38,8 @@ fn peprs(m: &Bound<'_, PyModule>) -> PyResult<()> {
 /// Verbosity is controlled via the `PEPRS_LOG` env var (e.g. `PEPRS_LOG=debug`);
 /// default is `warn`.
 fn init_tracing() {
-    use tracing_subscriber::{EnvFilter, fmt};
-    let filter = EnvFilter::try_from_env("PEPRS_LOG")
-        .unwrap_or_else(|_| EnvFilter::new("warn"));
+    use tracing_subscriber::{fmt, EnvFilter};
+    let filter = EnvFilter::try_from_env("PEPRS_LOG").unwrap_or_else(|_| EnvFilter::new("warn"));
     let _ = fmt()
         .with_env_filter(filter)
         .with_writer(std::io::stderr)
