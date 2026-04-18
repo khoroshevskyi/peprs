@@ -30,6 +30,11 @@ We are starting with the core PEP specification for metadata management and will
 pip install peprs
 ```
 
+or with `uv`
+```bash
+uv pip install peprs
+```
+
 ### Python (from source)
 
 To build and install the Python package from source (requires [maturin](https://www.maturin.rs/) and Rust toolchain):
@@ -51,13 +56,39 @@ peprs-core = { git = "https://github.com/pepkit/peprs" }
 
 ### CLI
 
-#### Using source
+Prebuilt binaries are published to [GitHub Releases](https://github.com/khoroshevskyi/peprs/releases) for Linux, macOS, Windows, and FreeBSD (x86_64 and aarch64).
+
+#### Using `ubi` (cross-platform, no Rust required)
+
+[`ubi`](https://github.com/houseabsolute/ubi) auto-detects your platform, downloads the right archive, and installs `peprs`:
+
+```bash
+ubi --project khoroshevskyi/peprs --in ~/.local/bin
+```
+
+#### Using `cargo-binstall`
+
+```bash
+cargo binstall peprs-cli
+```
+
+#### Manual download
+
+Grab the archive for your platform from the [releases page](https://github.com/khoroshevskyi/peprs/releases/latest), extract it, and place the `peprs` binary on your `PATH`. For example on Linux x86_64:
+
+```bash
+curl -L https://github.com/khoroshevskyi/peprs/releases/latest/download/peprs-Linux-x86_64-musl.tar.gz \
+  | tar xz -C ~/.local/bin/
+```
+
+#### From source
 
 ```bash
 cargo install --path peprs-cli
 ```
 
 #### Using Python
+
 ```bash
 pip install peprs
 ```
