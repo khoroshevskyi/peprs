@@ -3219,6 +3219,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "peprs"
+version = "0.1.0"
+dependencies = [
+ "pephub-client",
+ "peprs-core",
+ "peprs-eido",
+]
+
+[[package]]
 name = "peprs-cli"
 version = "0.1.0"
 dependencies = [

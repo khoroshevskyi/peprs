@@ -11,6 +11,7 @@ on:
             - peprs-eido
             - pephub-client
             - peprs-cli
+            - peprs
 
 permissions:
     contents: read

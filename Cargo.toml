@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "peprs",
     "peprs-core",
     "peprs-eido",
     "peprs-py",
