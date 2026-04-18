@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Iterator
+from typing import Any, Dict, List, Optional, Union, Iterator
 
 from polars import DataFrame as PolarsDataFrame
 from pandas import DataFrame as PandasDataFrame
@@ -138,6 +138,21 @@ class Project:
         ...
 
     @classmethod
+    def from_sample_yaml(
+        cls,
+        yaml_file: str,
+        sample_table_index: Optional[str] = None,
+    ) -> "Project":
+        """Create a Project from a YAML file containing raw sample records.
+
+        :param yaml_file: path to a YAML file with sample data (list-of-dicts
+            or dict-of-lists)
+        :param sample_table_index: column name to use as the sample index
+            (default: "sample_name")
+        """
+        ...
+
+    @classmethod
     def from_pephub(cls, registry: str) -> "Project":
         """Create a Project from a PEPHub registry path.
 
@@ -219,6 +234,15 @@ class Project:
         :param name: sample name to look up
         :return: Sample object for the matching sample
         :raises ValueError: if the sample name is not found
+        """
+        ...
+
+    def get_samples(self, names: Union[str, List[str]]) -> List[Sample]:
+        """Look up multiple samples by name.
+
+        :param names: a single sample name, or a list of sample names
+        :return: list of Sample objects for the matching samples. Names not
+            found in the sample table are silently skipped.
         """
         ...
 
