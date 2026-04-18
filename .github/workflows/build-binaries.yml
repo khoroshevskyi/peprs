@@ -47,7 +47,7 @@ jobs:
         with:
           command: build
           target: ${{ matrix.platform.target }}
-          args: "--locked --release"
+          args: "--locked --release -p peprs-cli"
           strip: true
       - name: Publish artifacts and release
         uses: houseabsolute/actions-rust-release@v0
