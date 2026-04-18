@@ -1,0 +1,27 @@
+[package]
+name = "peprs"
+version = "0.1.0"
+description = "Rust implementation of the PEP (Portable Encapsulated Projects) specification for biological sample metadata"
+readme = "../README.md"
+documentation = "https://docs.rs/peprs"
+categories = ["science::bioinformatics"]
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+
+[dependencies]
+peprs-core = { path = "../peprs-core", version = "0.1.0", optional = true }
+peprs-eido = { path = "../peprs-eido", version = "0.1.0", optional = true }
+pephub-client = { path = "../pephub-client", version = "0.1.0", optional = true }
+
+[features]
+default = ["core"]
+
+core = ["dep:peprs-core"]
+eido = ["dep:peprs-eido"]
+pephub = ["dep:pephub-client"]
+
+[package.metadata.docs.rs]
+all-features = true

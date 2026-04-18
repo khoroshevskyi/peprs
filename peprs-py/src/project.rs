@@ -142,6 +142,33 @@ impl PyProject {
     }
 
     ///
+    /// Create a Project from a YAML file containing raw sample data.
+    ///
+    /// # Arguments
+    ///
+    /// * `yaml_file` - Path to a YAML file with sample records.
+    /// * `sample_table_index` - Optional column name for the sample index.
+    ///
+    /// # Returns
+    ///
+    /// A new `PyProject`.
+    ///
+    #[classmethod]
+    #[pyo3(signature = (yaml_file, sample_table_index=None))]
+    pub fn from_sample_yaml(
+        _cls: &Bound<'_, PyType>,
+        yaml_file: String,
+        sample_table_index: Option<String>,
+    ) -> Result<Self, PeprsCoreError> {
+        let mut builder = Project::from_sample_yaml(&yaml_file);
+        if let Some(idx) = sample_table_index {
+            builder = builder.with_sample_table_index(idx);
+        }
+        let inner = builder.build()?;
+        Ok(PyProject { inner })
+    }
+
+    ///
     /// Create a Project from a Python dict with `config`, `samples`, and optional `subsamples` keys.
     ///
     /// # Arguments
@@ -530,6 +557,14 @@ impl PyProject {
     }
 
     ///
+    /// Get the sample table index column name.
+    ///
+    #[getter]
+    pub fn get_sample_name_colname(&self) -> &str {
+        &self.inner.sample_table_index
+    }
+
+    ///
     /// Set the project description.
     ///
     /// # Arguments
@@ -580,8 +615,8 @@ impl PyProject {
     ///
     /// An iterator yielding each sample as a Python dict.
     ///
-    #[getter]
-    fn samples(slf: Py<Self>, py: Python<'_>) -> PyResult<Py<PySamplesIter>> {
+    #[getter(samples)]
+    fn py_samples_iter(slf: Py<Self>, py: Python<'_>) -> PyResult<Py<PySamplesIter>> {
         Py::new(
             py,
             PySamplesIter {
@@ -613,6 +648,43 @@ impl PyProject {
             },
             Err(err) => Err(PyRuntimeError::new_err(err.to_string())),
         }
+    }
+
+    ///
+    /// Look up multiple samples by name.
+    ///
+    /// # Arguments
+    ///
+    /// * `names` - A sample name (str) or list of sample names to look up.
+    ///
+    /// # Returns
+    ///
+    /// A list of `Sample` objects for the matching samples. Names not found
+    /// in the sample table are silently skipped.
+    ///
+    /// # Examples
+    ///
+    /// ```python
+    /// samples = project.get_samples(["frog_1", "frog_2"])
+    /// sample = project.get_samples("frog_1")
+    /// ```
+    #[pyo3(signature = (names))]
+    pub fn get_samples(&self, py: Python<'_>, names: PyObject) -> PyResult<Vec<PySample>> {
+        let name_strings: Vec<String> = if let Ok(s) = names.extract::<String>(py) {
+            vec![s]
+        } else if let Ok(v) = names.extract::<Vec<String>>(py) {
+            v
+        } else {
+            return Err(PyValueError::new_err(
+                "names must be a string or list of strings",
+            ));
+        };
+        let name_refs: Vec<&str> = name_strings.iter().map(|s| s.as_str()).collect();
+        let samples = self
+            .inner
+            .get_samples(name_refs)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(samples.iter().map(|s| sample_to_pysample(py, s)).collect())
     }
 
     ///

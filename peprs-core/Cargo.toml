@@ -1,7 +1,12 @@
 [package]
 name = "peprs-core"
 version = "0.1.0"
-edition = "2024"
+description = "Core library for the PEP (Portable Encapsulated Projects) biological metadata specification"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
 
 [dependencies]
 polars = { workspace = true }

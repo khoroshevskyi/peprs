@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Iterator
+from typing import Any, Dict, List, Optional, Union, Iterator
 
 from polars import DataFrame as PolarsDataFrame
 from pandas import DataFrame as PandasDataFrame
@@ -75,6 +75,9 @@ class Project:
     pep_version: str
     """PEP specification version string."""
 
+    sample_name_colname: str
+    """Column name used as the sample table index (default: "sample_name")."""
+
     config: Optional[Dict[str, Any]]
     """Raw project configuration as a dictionary, or None if no config exists."""
 
@@ -131,6 +134,21 @@ class Project:
             "config" should be a dict of project config.
             "samples" should be a list of sample dicts.
             "subsamples" should be a list of lists of subsample dicts.
+        """
+        ...
+
+    @classmethod
+    def from_sample_yaml(
+        cls,
+        yaml_file: str,
+        sample_table_index: Optional[str] = None,
+    ) -> "Project":
+        """Create a Project from a YAML file containing raw sample records.
+
+        :param yaml_file: path to a YAML file with sample data (list-of-dicts
+            or dict-of-lists)
+        :param sample_table_index: column name to use as the sample index
+            (default: "sample_name")
         """
         ...
 
@@ -216,6 +234,15 @@ class Project:
         :param name: sample name to look up
         :return: Sample object for the matching sample
         :raises ValueError: if the sample name is not found
+        """
+        ...
+
+    def get_samples(self, names: Union[str, List[str]]) -> List[Sample]:
+        """Look up multiple samples by name.
+
+        :param names: a single sample name, or a list of sample names
+        :return: list of Sample objects for the matching samples. Names not
+            found in the sample table are silently skipped.
         """
         ...
 

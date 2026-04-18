@@ -1,7 +1,12 @@
 [package]
 name = "peprs-cli"
 version = "0.1.0"
-edition = "2024"
+description = "Command-line tool for validating, inspecting, and converting PEP projects"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
 
 [lib]
 name = "peprs_cli"
@@ -14,6 +19,6 @@ path = "src/main.rs"
 [dependencies]
 clap = { version = "4.5.48", features = ["derive"] }
 # peprs core code
-peprs-core = { path = "../peprs-core" }
-peprs-eido = { path = "../peprs-eido" }
+peprs-core = { path = "../peprs-core", version = "0.1.0" }
+peprs-eido = { path = "../peprs-eido", version = "0.1.0" }
 serde_json.workspace = true

@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
-edition = "2024"
 members = [
+    "peprs",
     "peprs-core",
     "peprs-eido",
     "peprs-py",
@@ -11,6 +11,14 @@ members = [
 exclude = [
     "peprs-wasm",
 ]
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/khoroshevskyi/peprs"
+homepage = "https://pep.databio.org/"
+authors = ["Oleksandr Khoroshevskyi"]
+
 [workspace.dependencies]
 polars = { version = "0.51.0", default-features = false, features = ["lazy", "is_in", "replace", "strings", "concat_str", "dtype-full", "polars-ops", "zip_with"]}
 polars-io = { version = "0.51.0", default-features = false }

@@ -5,6 +5,7 @@ use std::sync::LazyLock;
 use polars::prelude::*;
 use regex::Regex;
 use serde_json::Value;
+use tracing::warn;
 
 use crate::error::Error;
 
@@ -50,13 +51,24 @@ static RE_BRACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\{([^}]+)\}").u
 ///
 pub fn build_derive_template_expr(template: &str) -> Result<Expr, PolarsError> {
     // expand environment variables like `${HOME}` first.
-    let expanded_template = shellexpand::full(template)
-        .map_err(|e| {
-            PolarsError::ComputeError(
-                format!("Failed to expand env var in template '{}': {}", template, e).into(),
-            )
-        })?
-        .to_string();
+    // Missing env vars only produce a warning and are replaced with an empty string;
+    // leaving the literal `${VAR}` would make the downstream `{...}` column parser
+    // match `{VAR}` as a (nonexistent) column and fail.
+    let expanded_template = shellexpand::full_with_context_no_errors(
+        template,
+        || std::env::var("HOME").ok(),
+        |var: &str| match std::env::var(var) {
+            Ok(val) => Some(val),
+            Err(_) => {
+                warn!(
+                    "Env var '${{{}}}' in template '{}' is not set; substituting empty string",
+                    var, template
+                );
+                Some(String::new())
+            }
+        },
+    )
+    .to_string();
 
     let mut parts: Vec<Expr> = Vec::new();
     let mut last_match_end = 0;
@@ -95,6 +107,28 @@ pub fn extract_template_columns(template: &str) -> Vec<String> {
         .captures_iter(template)
         .map(|cap| cap.get(1).unwrap().as_str().to_string())
         .collect()
+}
+
+/// Read a YAML file containing sample data and convert it to a DataFrame.
+/// Supports both list-of-dicts and dict-of-lists YAML structures.
+pub fn resolve_yaml_to_dataframe(path: &Path) -> Result<DataFrame, Error> {
+    let file = std::fs::File::open(path).map_err(|e| {
+        Error::config(format!(
+            "Failed to open YAML file '{}': {e}",
+            path.display()
+        ))
+    })?;
+    let value: Value = serde_yaml::from_reader(file).map_err(|e| {
+        Error::config(format!(
+            "Failed to parse YAML file '{}': {e}",
+            path.display()
+        ))
+    })?;
+    let json_str = value.to_string();
+    let df = JsonReader::new(Cursor::new(json_str.as_bytes()))
+        .finish()
+        .map_err(|e| Error::config(format!("Failed to convert YAML to DataFrame: {e}")))?;
+    Ok(df)
 }
 
 /// Resolve a CSV path: try local file first, then fetch as URL via ureq.
@@ -137,4 +171,40 @@ pub fn resolve_csv_to_dataframe(path: &Path) -> Result<DataFrame, Error> {
         "File not found: '{}' (URL fetching not available without 'native' feature)",
         path.display()
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_env_var_does_not_error() {
+        let missing = "PEPRS_DEFINITELY_NOT_SET_XYZ_123";
+        // ensure the var is not set in the test environment
+        unsafe {
+            std::env::remove_var(missing);
+        }
+        let template = format!("/prefix/${{{}}}/{{sample_name}}.bam", missing);
+        let expr =
+            build_derive_template_expr(&template).expect("missing env var should warn, not error");
+        // missing env vars are substituted with empty string, so the unresolved
+        // name must NOT appear as a column reference in the resulting expression.
+        let debug = format!("{:?}", expr);
+        assert!(
+            !debug.contains(missing),
+            "expected unresolved placeholder to be stripped, got: {debug}"
+        );
+    }
+
+    #[test]
+    fn present_env_var_expands() {
+        unsafe {
+            std::env::set_var("PEPRS_TEST_VAR_PRESENT", "resolved");
+        }
+        let expr = build_derive_template_expr("/x/${PEPRS_TEST_VAR_PRESENT}/{sample_name}")
+            .expect("present env var should expand");
+        let debug = format!("{:?}", expr);
+        assert!(debug.contains("resolved"));
+        assert!(!debug.contains("PEPRS_TEST_VAR_PRESENT"));
+    }
 }

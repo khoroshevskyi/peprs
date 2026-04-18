@@ -3219,6 +3219,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "peprs"
+version = "0.1.0"
+dependencies = [
+ "pephub-client",
+ "peprs-core",
+ "peprs-eido",
+]
+
+[[package]]
 name = "peprs-cli"
 version = "0.1.0"
 dependencies = [
@@ -3270,7 +3279,7 @@ dependencies = [
 
 [[package]]
 name = "peprs-py"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "pephub-client",
  "peprs-cli",
@@ -3281,6 +3290,8 @@ dependencies = [
  "pyo3-polars",
  "pythonize",
  "serde_json",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

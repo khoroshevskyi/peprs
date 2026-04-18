@@ -1,0 +1,6 @@
+- sample_name: frog_1
+  protocol: anySampleType
+  file: data/frog1_data.txt
+- sample_name: frog_2
+  protocol: anySampleType
+  file: data/frog2_data.txt

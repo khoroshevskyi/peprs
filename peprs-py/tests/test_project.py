@@ -123,6 +123,33 @@ class TestSampleAccess:
             p.get_sample("nonexistent_sample")
 
     @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
+    def test_get_samples_list(self, example_pep_cfg_path):
+        """Verify get_samples with a list of names returns matching samples."""
+        p = Project(example_pep_cfg_path)
+        results = p.get_samples(["frog_1", "frog_2"])
+        assert isinstance(results, list)
+        assert len(results) == 2
+        assert results[0]["sample_name"] == "frog_1"
+        assert results[1]["sample_name"] == "frog_2"
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
+    def test_get_samples_single_string(self, example_pep_cfg_path):
+        """Verify get_samples accepts a single string."""
+        p = Project(example_pep_cfg_path)
+        results = p.get_samples("frog_1")
+        assert isinstance(results, list)
+        assert len(results) == 1
+        assert results[0]["sample_name"] == "frog_1"
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
+    def test_get_samples_skips_missing(self, example_pep_cfg_path):
+        """Verify get_samples silently skips names not in the table."""
+        p = Project(example_pep_cfg_path)
+        results = p.get_samples(["frog_1", "nonexistent"])
+        assert len(results) == 1
+        assert results[0]["sample_name"] == "frog_1"
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
     def test_samples_iteration(self, example_pep_cfg_path):
         """Verify iterating over samples yields dicts."""
         p = Project(example_pep_cfg_path)
