@@ -468,7 +468,9 @@ impl Project {
     ///
     /// # Returns
     ///
-    /// `Some(Sample)` if found, `None` if no match.
+    /// A `Vec<Sample>` containing all samples found for the provided names.
+    /// Names that do not match any sample are silently skipped and are not
+    /// included in the returned vector.
     ///
     pub fn get_samples<'a>(&'a self, names: Vec<&str>) -> PolarsResult<Vec<Sample<'a>>> {
         let mut results = Vec::with_capacity(names.len());
