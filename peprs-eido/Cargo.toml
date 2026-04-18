@@ -1,10 +1,15 @@
 [package]
 name = "peprs-eido"
 version = "0.1.0"
-edition = "2024"
+description = "JSON-schema validation for PEP projects (eido extensions)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
 
 [dependencies]
-peprs-core = { path = "../peprs-core", default-features = false, features = ["csv", "json"] }
+peprs-core = { path = "../peprs-core", version = "0.1.0", default-features = false, features = ["csv", "json"] }
 polars = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }

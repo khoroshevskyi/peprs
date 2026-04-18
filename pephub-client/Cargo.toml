@@ -1,7 +1,12 @@
 [package]
 name = "pephub-client"
 version = "0.1.0"
-edition = "2024"
+description = "HTTP client for the PEPHub registry API"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
 
 [dependencies]
 dirs = "6"
@@ -9,7 +14,7 @@ thiserror = "2.0.17"
 ureq = { version = "3.1.2", features = ["json"] }
 
 # our code
-peprs-core = { path = "../peprs-core" }
+peprs-core = { path = "../peprs-core", version = "0.1.0" }
 serde_yaml = "0.9.34"
 serde = "1.0.228"
 
