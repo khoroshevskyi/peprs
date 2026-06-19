@@ -2,7 +2,11 @@ use std::path::PathBuf;
 
 use dirs::home_dir;
 
+// All of this should be changed to toml file, same way as logfire works
+
 const PH_HOME_ENV_VAR: &str = "PH_HOME";
+const PH_HOME_DEFAULT: &str = ".pephubclient";
+const PH_TOKEN_FILE_NAME: &str = "jwt.txt";
 
 #[derive(Clone, Debug)]
 pub struct Cache {
@@ -16,8 +20,9 @@ impl Cache {
     }
 
     /// Creates cache from environment variable PH_HOME (if defined) otherwise
-    /// defaults to [`home_dir`]/.cache/pephub/
+    /// defaults to [`home_dir`]/.pephubclient
     pub fn from_env() -> Self {
+        // TODO: verify if thats correct
         match std::env::var(PH_HOME_ENV_VAR) {
             Ok(home) => {
                 let mut path: PathBuf = home.into();
@@ -34,11 +39,9 @@ impl Cache {
     }
 
     /// Returns the location of the token file
+    /// For now token_path is the same as path
     pub fn token_path(&self) -> PathBuf {
         let mut path = self.path.clone();
-        // Remove `"hub"`
-        path.pop();
-        path.push("token");
         path
     }
 
@@ -66,9 +69,8 @@ impl Cache {
 impl Default for Cache {
     fn default() -> Self {
         let mut path = home_dir().expect("Cache directory cannot be found");
-        path.push(".cache");
-        path.push("pephub");
-        path.push("hub");
+        path.push(PH_HOME_DEFAULT);
+        path.push(PH_TOKEN_FILE_NAME);
         Self::new(path)
     }
 }

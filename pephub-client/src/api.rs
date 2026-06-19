@@ -1,8 +1,7 @@
+use crate::error::ApiError;
 use std::collections::HashMap;
 use std::num::ParseIntError;
 use std::path::PathBuf;
-
-use thiserror::Error;
 
 use peprs_core::config::ProjectConfig;
 use serde::Deserialize;
@@ -14,8 +13,9 @@ use ureq::{Agent, RequestBuilder};
 
 use crate::cache::Cache;
 
-const PH_ENDPOINT_ENV_VAR: &str = "PH_ENDPOINT";
-
+const PH_ENDPOINT_ENV_VAR: &str = "PEPHUB_BASE_URL";
+const DEFAULT_ENDPOINT: &str = "https://pephub-api.databio.org";
+// DEFAULT_BASE_URL: https://pephub.databio.org/
 /// Current version (used in user-agent)
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Current name (used in user-agent)
@@ -24,7 +24,6 @@ const USER_AGENT: &str = "User-Agent";
 const AUTHORIZATION: &str = "Authorization";
 
 type HeaderMap = HashMap<&'static str, String>;
-type HeaderName = &'static str;
 
 /// Simple wrapper over [`ureq::Agent`] to include default headers
 #[derive(Clone, Debug)]
@@ -45,13 +44,15 @@ impl HeaderAgent {
         }
         request
     }
+
+    // TODO: Do we need to add here post method?
 }
 
 /// Helper to create [`Api`] with all the options.
 #[derive(Debug)]
 pub struct ApiBuilder {
-    endpoint: String,
-    cache: Cache,
+    pub endpoint: String,
+    pub cache: Cache,
     token: Option<String>,
     user_agent: Vec<(String, String)>,
 }
@@ -86,7 +87,7 @@ impl ApiBuilder {
     pub fn from_cache(cache: Cache) -> Self {
         let token = cache.token();
 
-        let endpoint = "https://pephub-api.databio.org".to_string();
+        let endpoint = DEFAULT_ENDPOINT.to_string();
 
         let user_agent = vec![
             ("unknown".to_string(), "None".to_string()),
@@ -104,7 +105,7 @@ impl ApiBuilder {
 
     /// Changes the endpoint of the API. Default is `https://pephub-api.databio.org/`.
     pub fn with_endpoint(mut self, endpoint: String) -> Self {
-        self.endpoint = endpoint;
+        self.endpoint = endpoint.trim_end_matches('/').to_string();
         self
     }
 
@@ -236,42 +237,6 @@ impl Api {
             .map_err(Box::new)?;
         Ok(body)
     }
-}
-
-#[derive(Debug, Error)]
-/// All errors the API can throw
-pub enum ApiError {
-    /// Api expects certain header to be present in the results to derive some information
-    #[error("Header {0} is missing")]
-    MissingHeader(HeaderName),
-
-    /// The header exists, but the value is not conform to what the Api expects.
-    #[error("Header {0} is invalid")]
-    InvalidHeader(HeaderName),
-
-    /// Error in the request
-    #[error("request error: {0}")]
-    RequestError(#[from] Box<ureq::Error>),
-
-    /// Error parsing some range value
-    #[error("Cannot parse int")]
-    ParseIntError(#[from] ParseIntError),
-
-    /// I/O Error
-    #[error("I/O error {0}")]
-    IoError(#[from] std::io::Error),
-
-    /// We tried to download chunk too many times
-    #[error("Too many retries: {0}")]
-    TooManyRetries(Box<ApiError>),
-
-    /// The part file is corrupted
-    #[error("Invalid part file - corrupted file")]
-    InvalidResume,
-
-    /// Error parsing YAML configuration
-    #[error("YAML parse error: {0}")]
-    YamlParseError(#[from] Box<serde_yaml::Error>),
 }
 
 #[cfg(test)]

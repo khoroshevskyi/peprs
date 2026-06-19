@@ -3232,6 +3232,7 @@ name = "peprs-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "pephub-client",
  "peprs-core",
  "peprs-eido",
  "serde_json",

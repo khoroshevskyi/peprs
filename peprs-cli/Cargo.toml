@@ -21,4 +21,5 @@ clap = { version = "4.5.48", features = ["derive"] }
 # peprs core code
 peprs-core = { path = "../peprs-core", version = "0.1.0" }
 peprs-eido = { path = "../peprs-eido", version = "0.1.0" }
+pephub-client = { path = "../pephub-client", version = "0.1.0" }
 serde_json.workspace = true

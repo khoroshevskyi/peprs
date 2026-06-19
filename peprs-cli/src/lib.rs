@@ -1,11 +1,13 @@
 pub mod cli;
+pub mod phc;
 
 use clap::Parser;
+use pephub_client::cache;
 use peprs_core::project::Project;
 
 use peprs_core::project::ProjectBuilder;
 
-use crate::cli::Commands;
+use crate::cli::{Cli, Commands, PHC};
 
 fn build_project(
     path: &str,
@@ -212,5 +214,25 @@ fn run_cli(cli: crate::cli::Cli) {
                 std::process::exit(1);
             }
         },
+        Commands::Client { command } => phc::phc_handler(command),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*; // Bring your CLI parser struct into scope
+
+    #[test]
+    fn test_my_subcommand() {
+        let args = vec!["peprs", "client", "pull", "registry/project:default"];
+        let cli = Cli::try_parse_from(args).expect("Parsing failed");
+
+        match cli.command {
+            Commands::Client { command } => match command {
+                PHC::Pull { path } => assert_eq!(path, "registry/project:default"),
+                _ => unreachable!(),
+            },
+            _ => panic!("Expected Commands::Client"),
+        }
     }
 }
