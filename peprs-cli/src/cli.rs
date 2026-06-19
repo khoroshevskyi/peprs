@@ -134,9 +134,51 @@ pub enum PHC {
     /// Logout from current PEPhub
     Logout {},
 
-    /// Pull project
+    /// Pull project from PEPHub and save it locally.
     Pull {
-        /// Registry path
+        /// PEPHub registry path, e.g. namespace/name:tag
+        registry: String,
+
+        /// Output folder (or .zip file path when --zip)
+        #[arg(short = 'p', long = "path")]
         path: String,
+
+        /// Save as a single .zip archive instead of a folder
+        #[arg(long = "zip", default_value_t = false)]
+        zip: bool,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_my_subcommand() {
+        let args = vec![
+            "peprs",
+            "client",
+            "pull",
+            "registry/project:default",
+            "-p",
+            "./out",
+        ];
+        let cli = Cli::try_parse_from(args).expect("Parsing failed");
+
+        match cli.command {
+            Commands::Client { command } => match command {
+                PHC::Pull {
+                    registry,
+                    path,
+                    zip,
+                } => {
+                    assert_eq!(registry, "registry/project:default");
+                    assert_eq!(path, "./out");
+                    assert!(!zip);
+                }
+                _ => unreachable!(),
+            },
+            _ => panic!("Expected Commands::Client"),
+        }
+    }
 }

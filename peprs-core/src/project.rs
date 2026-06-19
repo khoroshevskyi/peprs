@@ -15,7 +15,7 @@ use crate::error::Error;
 use crate::sample::{Sample, SamplesIter};
 use crate::utils::{
     build_derive_template_expr, extract_template_columns, resolve_csv_to_dataframe,
-    resolve_yaml_to_dataframe,
+    resolve_yaml_to_dataframe, write_raw_folder_parts, write_raw_zip_parts,
 };
 #[cfg(feature = "wdl")]
 use crate::wdl::WdlInputParsingOptions;
@@ -628,47 +628,12 @@ impl Project {
     /// * `path` - Destination folder path (created if missing).
     ///
     pub fn write_raw_folder<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
-        // let project_name = self.get_name().unwrap_or("default_name".to_string());
-
-        let folder = path.as_ref();
-        std::fs::create_dir_all(&folder)?;
-
-        // Save raw samples CSV
-        let sample_table_name = "sample_table.csv";
-        let sample_table_path = folder.join(sample_table_name);
-        let mut sample_file = File::create(&sample_table_path)?;
-        CsvWriter::new(&mut sample_file)
-            .include_header(true)
-            .with_separator(b',')
-            .finish(&mut self.samples_raw)?;
-
-        // Save subsample tables
-        let mut subsample_names: Vec<&str> = Vec::new();
-        if let Some(ref mut sub_dfs) = self.subsamples {
-            for (i, sub_df) in sub_dfs.iter_mut().enumerate() {
-                let sub_name = format!("subsample_table_{}.csv", i + 1);
-                let sub_path = folder.join(&sub_name);
-                let mut sub_file = File::create(&sub_path)?;
-                CsvWriter::new(&mut sub_file)
-                    .include_header(true)
-                    .with_separator(b',')
-                    .finish(sub_df)?;
-                subsample_names.push(Box::leak(sub_name.into_boxed_str()));
-            }
-        }
-
-        // Save config YAML pointing to the CSV files
-        let config_path = folder.join("project_config.yaml");
-        if let Some(ref config) = self.config {
-            let subsample_arg = if subsample_names.is_empty() {
-                None
-            } else {
-                Some(subsample_names)
-            };
-            config.save_yaml(&config_path, Some(sample_table_name), subsample_arg)?;
-        }
-
-        Ok(())
+        write_raw_folder_parts(
+            path,
+            self.config.as_ref(),
+            &mut self.samples_raw,
+            self.subsamples.as_deref_mut(),
+        )
     }
 
     ///
@@ -680,56 +645,12 @@ impl Project {
     ///
     #[cfg(feature = "zip")]
     pub fn write_raw_zip<P: AsRef<Path>>(&mut self, path: P) -> Result<(), Error> {
-        use ::zip::write::SimpleFileOptions;
-        use ::zip::{CompressionMethod, ZipWriter};
-
-        let file = File::create(path.as_ref())?;
-        let mut zip = ZipWriter::new(file);
-        let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
-
-        // Write sample table CSV into zip
-        let sample_table_name = "sample_table.csv";
-        let mut sample_buf = Vec::new();
-        CsvWriter::new(&mut sample_buf)
-            .include_header(true)
-            .with_separator(b',')
-            .finish(&mut self.samples_raw)?;
-        zip.start_file(sample_table_name, options)?;
-        zip.write_all(&sample_buf)?;
-
-        // Write subsample tables into zip
-        let mut subsample_names: Vec<String> = Vec::new();
-        if let Some(ref mut sub_dfs) = self.subsamples {
-            for (i, sub_df) in sub_dfs.iter_mut().enumerate() {
-                let sub_name = format!("subsample_table_{}.csv", i + 1);
-                let mut sub_buf = Vec::new();
-                CsvWriter::new(&mut sub_buf)
-                    .include_header(true)
-                    .with_separator(b',')
-                    .finish(sub_df)?;
-                zip.start_file(&sub_name, options)?;
-                zip.write_all(&sub_buf)?;
-                subsample_names.push(sub_name);
-            }
-        }
-
-        // Write config YAML into zip
-        if let Some(ref config) = self.config {
-            let subsample_arg: Option<Vec<&str>> = if subsample_names.is_empty() {
-                None
-            } else {
-                Some(subsample_names.iter().map(|s| s.as_str()).collect())
-            };
-            let raw_config = config.get_raw_config(Some(sample_table_name), subsample_arg);
-            if let Some(config_value) = raw_config {
-                let yaml = serde_yaml::to_string(&config_value)?;
-                zip.start_file("project_config.yaml", options)?;
-                zip.write_all(yaml.as_bytes())?;
-            }
-        }
-
-        zip.finish()?;
-        Ok(())
+        write_raw_zip_parts(
+            path,
+            self.config.as_ref(),
+            &mut self.samples_raw,
+            self.subsamples.as_deref_mut(),
+        )
     }
 
     ///

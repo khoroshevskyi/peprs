@@ -1,5 +1,9 @@
-use pephub_client::api;
 use crate::cli::PHC;
+use colored::Colorize;
+use pephub_client::api;
+use std::path::PathBuf;
+
+use peprs_core::utils::save_raw_pep;
 
 pub fn phc_handler(command: &PHC) {
     match command {
@@ -12,24 +16,58 @@ pub fn phc_handler(command: &PHC) {
             println!("Logout was provided");
         }
 
-        PHC::Pull { path } => {
-            println!("Pull path: {}", path);
+        PHC::Pull {
+            registry,
+            path,
+            zip,
+        } => {
+            let mut path: PathBuf = path.into();
+            let api_client = match api::ApiBuilder::default().build() {
+                Ok(client) => client,
+                Err(e) => {
+                    eprintln!("Failed to create PepHub client: {}", e);
+                    std::process::exit(1);
+                }
+            };
 
-            let api_builder = api::ApiBuilder::default();
-            let cache_client = api_builder.cache.clone();
-            println!("Cache path: {:?}", cache_client.token_path());
-            println!("Cache token: {:?}", cache_client.token().unwrap());
+            let raw = match api_client.get_raw(registry) {
+                Ok(raw) => raw,
+                Err(e) => {
+                    eprintln!("Failed to fetch '{}' from PepHub: {}", registry, e);
+                    std::process::exit(1);
+                }
+            };
 
-            let api_client = api_builder.build().map_err(|e| {
-                peprs_core::error::Error::Processing(format!("Failed to create PepHub client: {}", e))
-                    }).unwrap();
+            let mut file_name = registry.to_string();
+            file_name = file_name.replace("/", "_").replace(":", "_");
 
-            let project = api_client.get_raw(path).map_err(|e| {
-                peprs_core::error::Error::Processing(format!("Failed to fetch from PepHub: {}", e))
-            }).unwrap();
+            if *zip {
+                if !path.ends_with(".zip") {
+                    file_name.push_str(".zip");
+                    path = path.join(file_name);
+                }
+            } else {
+                path = path.join(file_name);
+            }
 
-            println!("{:?}", project);
-
+            match save_raw_pep(&path, &raw, *zip) {
+                Ok(()) => println!(
+                    "{}",
+                    format!(
+                        "Project '{}' successfully saved to {}",
+                        registry,
+                        path.display()
+                    )
+                    .green()
+                ),
+                Err(e) => {
+                    eprintln!(
+                        "{}",
+                        format!("Failed to save project to {}: {}", path.display(), e).red()
+                    );
+                    std::process::exit(1);
+                }
+            }
         }
     }
 }
