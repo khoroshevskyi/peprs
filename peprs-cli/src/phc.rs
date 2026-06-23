@@ -2,6 +2,7 @@ use crate::cli::PHC;
 use colored::Colorize;
 use pephub_client::api;
 use std::path::PathBuf;
+use pephub_client::auth::{CacheBuilder, Cache};
 
 use peprs_core::utils::save_raw_pep;
 
@@ -11,9 +12,20 @@ pub fn phc_handler(command: &PHC) {
             println!("Login was provided");
             println!("token: {:?}", token);
             println!("url: {:?}", url);
+
+            println!("Testing token saver...");
+            let cache: Cache;
+            if let Some(provided_token) = token {
+                cache = CacheBuilder::new().with_token(provided_token).build().unwrap();
+            } else {
+                cache = CacheBuilder::new().build().unwrap();
+            }
+            cache.save_token().unwrap();
         }
+
         PHC::Logout {} => {
-            println!("Logout was provided");
+            let cache = Cache::default();
+            cache.logout().unwrap();
         }
 
         PHC::Pull {

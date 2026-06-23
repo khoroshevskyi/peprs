@@ -38,3 +38,19 @@ pub enum ApiError {
     #[error("YAML parse error: {0}")]
     YamlParseError(#[from] Box<serde_yaml::Error>),
 }
+
+#[derive(Debug, Error)]
+/// Errors raised while loading or building the token [`crate::auth::Cache`]
+pub enum CacheError {
+    /// I/O Error reading or writing the token file
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// The token file is not valid TOML
+    #[error("failed to parse token file: {0}")]
+    TomlDe(#[from] toml::de::Error),
+
+    /// The token could not be serialized to TOML
+    #[error("failed to serialize token: {0}")]
+    TomlSer(#[from] toml::ser::Error),
+}
