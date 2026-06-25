@@ -1,17 +1,35 @@
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 use dirs::home_dir;
-use jsonwebtoken::dangerous::insecure_decode;
-use serde::{Serialize, Deserialize};
 use fs::read_to_string;
+use jsonwebtoken::dangerous::insecure_decode;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use crate::api::HeaderAgent;
 use crate::error::CacheError;
 
 const PH_HOME_ENV_VAR: &str = "PH_HOME";
 const PH_HOME_DEFAULT: &str = ".pephubclient";
 const PH_TOKEN_FILE_NAME: &str = "jwt.toml";
 const DEFAULT_ENDPOINT: &str = "https://pephub-api.databio.org";
+const DEVICE_INIT_PATH: &str = "auth/device/init";
+const DEVICE_TOKEN_PATH: &str = "auth/device/token";
+
+/// Response from the device-code init endpoint.
+#[derive(Debug, Deserialize)]
+struct InitializeDeviceCodeResponse {
+    device_code: String,
+    auth_url: String,
+}
+
+/// Response from the device-code token-exchange endpoint.
+#[derive(Debug, Deserialize)]
+struct DeviceTokenResponse {
+    jwt_token: String,
+}
 
 /// Default token-file path: `$PH_HOME/jwt.toml` if `PH_HOME` is set,
 /// otherwise `~/.pephubclient/jwt.toml`.
@@ -122,21 +140,97 @@ impl Default for Cache {
 
 impl Cache {
     pub fn new(path: PathBuf, token: Token) -> Self {
-        Self { token_path: path, token }
+        Self {
+            token_path: path,
+            token,
+        }
     }
 
     pub fn save_token(&self) -> Result<(), CacheError> {
         self.token.to_toml(&self.token_path)
     }
 
+    /// Logs in to PEPHub via the OAuth device flow, then saves the JWT to disk.
+    ///
+    /// Mirrors the Python `pephubclient` flow: request a device code, ask the user to
+    /// authenticate in the browser, poll the token endpoint a few times, then prompt the
+    /// user to continue before a final attempt.
     pub fn login(&self) -> Result<(), CacheError> {
-        let api = self.token.base_url.clone();
+        let base = self.token.base_url.trim_end_matches('/').to_string();
+        let client = HeaderAgent::unauthenticated()?;
 
-        println!("Logging in...");
+        // 1. Request a device code.
+        let init: InitializeDeviceCodeResponse = client
+            .post(&format!("{base}/{DEVICE_INIT_PATH}"))
+            .send_empty()
+            .map_err(Box::new)?
+            .body_mut()
+            .read_json()
+            .map_err(Box::new)?;
 
+        // 2. Instruct the user.
+        println!(
+            "User verification code: {}, please go to the website: {} to authenticate.",
+            init.device_code, init.auth_url
+        );
 
-        // TODO: 1. Log in and get token
-        // TODO: 2. Save token using to_toml.
+        // 3-4. Initial polling: 3 attempts, 2s apart.
+        thread::sleep(Duration::from_secs(2));
+        for _ in 0..3 {
+            match self.exchange(&client, &base, &init.device_code) {
+                Ok(jwt) => return self.persist(jwt),
+                Err(CacheError::AuthorizationPending) => {
+                    thread::sleep(Duration::from_secs(2));
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        // 5. Manual continue.
+        print!("If you logged in, press enter to continue...");
+        io::stdout().flush().ok();
+        let mut line = String::new();
+        io::stdin().read_line(&mut line).ok();
+
+        // 6. Final attempt.
+        match self.exchange(&client, &base, &init.device_code) {
+            Ok(jwt) => self.persist(jwt),
+            Err(CacheError::AuthorizationPending) => {
+                println!("Login failed. Please try again.");
+                Err(CacheError::LoginFailed)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Exchanges a device code for a JWT. Maps HTTP 401 to [`CacheError::AuthorizationPending`].
+    fn exchange(
+        &self,
+        client: &HeaderAgent,
+        base: &str,
+        device_code: &str,
+    ) -> Result<String, CacheError> {
+        let resp = client
+            .post(&format!("{base}/{DEVICE_TOKEN_PATH}"))
+            .header("device-code", device_code)
+            .send_empty();
+
+        match resp {
+            Ok(mut r) => {
+                let token: DeviceTokenResponse = r.body_mut().read_json().map_err(Box::new)?;
+                Ok(token.jwt_token)
+            }
+            Err(ureq::Error::StatusCode(401)) => Err(CacheError::AuthorizationPending),
+            Err(e) => Err(CacheError::Request(Box::new(e))),
+        }
+    }
+
+    /// Stores the obtained JWT in the token file.
+    fn persist(&self, jwt: String) -> Result<(), CacheError> {
+        let mut token = self.token.clone();
+        token.token = Some(jwt);
+        token.to_toml(&self.token_path)?;
+        println!("Successfully logged in!");
         Ok(())
     }
 
@@ -224,13 +318,12 @@ impl CacheBuilder {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_init_cache(){
+    fn test_init_cache() {
         let cache = Cache::default();
         assert_eq!(cache.token_path, default_token_path());
     }

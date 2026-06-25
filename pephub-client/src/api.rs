@@ -8,7 +8,7 @@ use serde::Deserialize;
 use ureq::config::ConfigBuilder;
 use ureq::config::RedirectAuthHeaders;
 use ureq::tls::{TlsConfig, TlsProvider};
-use ureq::typestate::{AgentScope, WithoutBody};
+use ureq::typestate::{AgentScope, WithBody, WithoutBody};
 use ureq::{Agent, RequestBuilder};
 
 use crate::cache::Cache;
@@ -27,14 +27,20 @@ type HeaderMap = HashMap<&'static str, String>;
 
 /// Simple wrapper over [`ureq::Agent`] to include default headers
 #[derive(Clone, Debug)]
-pub struct HeaderAgent {
+pub(crate) struct HeaderAgent {
     agent: Agent,
     headers: HeaderMap,
 }
 
 impl HeaderAgent {
-    fn new(agent: Agent, headers: HeaderMap) -> Self {
+    pub(crate) fn new(agent: Agent, headers: HeaderMap) -> Self {
         Self { agent, headers }
+    }
+
+    /// Builds a [`HeaderAgent`] with no default headers, for unauthenticated requests.
+    pub(crate) fn unauthenticated() -> Result<Self, ApiError> {
+        let agent: Agent = builder()?.build().into();
+        Ok(Self::new(agent, HeaderMap::new()))
     }
 
     fn get(&self, url: &str) -> RequestBuilder<WithoutBody> {
@@ -45,7 +51,13 @@ impl HeaderAgent {
         request
     }
 
-    // TODO: Do we need to add here post method?
+    pub(crate) fn post(&self, url: &str) -> RequestBuilder<WithBody> {
+        let mut request = self.agent.post(url);
+        for (header, value) in &self.headers {
+            request = request.header(*header, value);
+        }
+        request
+    }
 }
 
 /// Helper to create [`Api`] with all the options.

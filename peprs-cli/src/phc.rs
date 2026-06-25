@@ -9,18 +9,23 @@ use peprs_core::utils::save_raw_pep;
 pub fn phc_handler(command: &PHC) {
     match command {
         PHC::Login { token, url } => {
-            println!("Login was provided");
-            println!("token: {:?}", token);
-            println!("url: {:?}", url);
-
-            println!("Testing token saver...");
-            let cache: Cache;
-            if let Some(provided_token) = token {
-                cache = CacheBuilder::new().with_token(provided_token).build().unwrap();
-            } else {
-                cache = CacheBuilder::new().build().unwrap();
-            }
-            cache.save_token().unwrap();
+            let mut cache_builder = match url {
+                Some(base_url) => {
+                    CacheBuilder::new().with_url(base_url.to_string())
+                },
+                None => CacheBuilder::new()
+            };
+            match token {
+                Some(token_string) => {
+                    println!("Token provided. Registering... ");
+                    let cache = cache_builder.with_token(token_string.to_string()).build().unwrap();
+                    cache.save_token().unwrap();
+                    println!("Token successfully registered.");
+                },
+                None => {
+                    cache_builder.build().unwrap().login().unwrap();
+                }
+            };
         }
 
         PHC::Logout {} => {

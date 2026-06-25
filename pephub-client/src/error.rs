@@ -53,4 +53,20 @@ pub enum CacheError {
     /// The token could not be serialized to TOML
     #[error("failed to serialize token: {0}")]
     TomlSer(#[from] toml::ser::Error),
+
+    /// Network / HTTP error talking to PEPHub
+    #[error("request error: {0}")]
+    Request(#[from] Box<ureq::Error>),
+
+    /// Failed to build the HTTP client used for login
+    #[error("api error: {0}")]
+    Api(#[from] ApiError),
+
+    /// Device code not yet authorized (HTTP 401) — retryable
+    #[error("authorization pending")]
+    AuthorizationPending,
+
+    /// Login did not complete (user never authorized, or final attempt failed)
+    #[error("login failed: device code was not authorized")]
+    LoginFailed,
 }
