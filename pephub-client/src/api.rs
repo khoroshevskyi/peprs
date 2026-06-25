@@ -11,11 +11,9 @@ use ureq::tls::{TlsConfig, TlsProvider};
 use ureq::typestate::{AgentScope, WithBody, WithoutBody};
 use ureq::{Agent, RequestBuilder};
 
-use crate::cache::Cache;
+use crate::auth::{Cache, CacheBuilder};
 
 const PH_ENDPOINT_ENV_VAR: &str = "PEPHUB_BASE_URL";
-const DEFAULT_ENDPOINT: &str = "https://pephub-api.databio.org";
-// DEFAULT_BASE_URL: https://pephub.databio.org/
 /// Current version (used in user-agent)
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Current name (used in user-agent)
@@ -87,7 +85,7 @@ impl ApiBuilder {
     /// PH_ENDPOINT modifies the URL for the pephub location
     /// to download files from.
     pub fn from_env() -> Self {
-        let cache = Cache::from_env();
+        let cache = Cache::default();
         let mut builder = Self::from_cache(cache);
         if let Ok(endpoint) = std::env::var(PH_ENDPOINT_ENV_VAR) {
             builder = builder.with_endpoint(endpoint);
@@ -99,7 +97,7 @@ impl ApiBuilder {
     pub fn from_cache(cache: Cache) -> Self {
         let token = cache.token();
 
-        let endpoint = DEFAULT_ENDPOINT.to_string();
+        let endpoint = cache.base_url().trim_end_matches('/').to_string();
 
         let user_agent = vec![
             ("unknown".to_string(), "None".to_string()),
@@ -121,9 +119,15 @@ impl ApiBuilder {
         self
     }
 
-    /// Changes the location of the cache directory. Defaults is `~/.cache/pephub/`.
-    pub fn with_cache_dir(mut self, cache_dir: PathBuf) -> Self {
-        self.cache = Cache::new(cache_dir);
+    /// Changes the location of the token file. Defaults to `$PH_HOME/jwt.toml`
+    /// (falling back to `~/.pephubclient/jwt.toml`).
+    pub fn with_cache_dir(mut self, token_path: PathBuf) -> Self {
+        self.cache = CacheBuilder::new()
+            .with_token_path(token_path)
+            .build()
+            .expect("Failed to load token cache");
+        self.token = self.cache.token();
+        self.endpoint = self.cache.base_url().trim_end_matches('/').to_string();
         self
     }
 
@@ -285,9 +289,16 @@ mod tests {
 
     #[rstest]
     fn test_api_builder_default() {
-        let builder = ApiBuilder::default();
+        // Use a token path that does not exist so the result is independent of any
+        // real cached login on the machine running the tests.
+        let token_path = std::env::temp_dir().join("peprs_api_builder_default_test_jwt.toml");
+        let _ = std::fs::remove_file(&token_path);
+
+        let builder = ApiBuilder::default().with_cache_dir(token_path.clone());
         assert_eq!(builder.endpoint, "https://pephub-api.databio.org");
         assert_eq!(builder.token, None);
+
+        let _ = std::fs::remove_file(&token_path);
     }
 
     #[rstest]

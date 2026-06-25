@@ -150,6 +150,16 @@ impl Cache {
         self.token.to_toml(&self.token_path)
     }
 
+    /// Returns the cached JWT string, if one is present.
+    pub fn token(&self) -> Option<String> {
+        self.token.token.clone()
+    }
+
+    /// Returns the base url stored alongside the token.
+    pub fn base_url(&self) -> &str {
+        &self.token.base_url
+    }
+
     /// Logs in to PEPHub via the OAuth device flow, then saves the JWT to disk.
     ///
     /// Mirrors the Python `pephubclient` flow: request a device code, ask the user to
