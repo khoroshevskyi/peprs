@@ -39,6 +39,19 @@ pub enum ApiError {
     YamlParseError(#[from] Box<serde_yaml::Error>),
 }
 
+impl ApiError {
+    /// Returns the HTTP status code if this error originated from an HTTP response.
+    pub fn status_code(&self) -> Option<u16> {
+        match self {
+            ApiError::RequestError(e) => match e.as_ref() {
+                ureq::Error::StatusCode(code) => Some(*code),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 /// Errors raised while loading or building the token [`crate::auth::Cache`]
 pub enum CacheError {

@@ -59,11 +59,12 @@ impl HeaderAgent {
 }
 
 /// Helper to create [`Api`] with all the options.
+///
+/// The token and endpoint live in [`cache`](Self::cache) (its `Token` holds both the JWT and
+/// the base url), so it is the single source of truth.
 #[derive(Debug)]
 pub struct ApiBuilder {
-    pub endpoint: String,
     pub cache: Cache,
-    token: Option<String>,
     user_agent: Vec<(String, String)>,
 }
 
@@ -95,27 +96,18 @@ impl ApiBuilder {
 
     /// From a given cache
     pub fn from_cache(cache: Cache) -> Self {
-        let token = cache.token();
-
-        let endpoint = cache.base_url().trim_end_matches('/').to_string();
-
         let user_agent = vec![
             ("unknown".to_string(), "None".to_string()),
             (NAME.to_string(), VERSION.to_string()),
             ("rust".to_string(), "unknown".to_string()),
         ];
 
-        Self {
-            endpoint,
-            cache,
-            token,
-            user_agent,
-        }
+        Self { cache, user_agent }
     }
 
     /// Changes the endpoint of the API. Default is `https://pephub-api.databio.org/`.
     pub fn with_endpoint(mut self, endpoint: String) -> Self {
-        self.endpoint = endpoint.trim_end_matches('/').to_string();
+        self.cache.token.base_url = endpoint.trim_end_matches('/').to_string();
         self
     }
 
@@ -126,14 +118,12 @@ impl ApiBuilder {
             .with_token_path(token_path)
             .build()
             .expect("Failed to load token cache");
-        self.token = self.cache.token();
-        self.endpoint = self.cache.base_url().trim_end_matches('/').to_string();
         self
     }
 
     /// Sets the token to be used in the API
     pub fn with_token(mut self, token: Option<String>) -> Self {
-        self.token = token;
+        self.cache.token.token = token;
         self
     }
 
@@ -152,7 +142,7 @@ impl ApiBuilder {
             .collect::<Vec<_>>()
             .join("; ");
         headers.insert(USER_AGENT, user_agent.to_string());
-        if let Some(token) = &self.token {
+        if let Some(token) = self.cache.token() {
             headers.insert(AUTHORIZATION, format!("Bearer {token}"));
         }
         headers
@@ -161,15 +151,13 @@ impl ApiBuilder {
     /// Consumes the builder and builds the final [`Api`]
     pub fn build(self) -> Result<Api, ApiError> {
         let headers = self.build_headers();
+        let endpoint = self.cache.base_url().trim_end_matches('/').to_string();
 
         let builder = builder()?.redirect_auth_headers(RedirectAuthHeaders::SameHost);
         let agent: Agent = builder.build().into();
         let client = HeaderAgent::new(agent, headers.clone());
 
-        Ok(Api {
-            endpoint: self.endpoint,
-            client,
-        })
+        Ok(Api { endpoint, client })
     }
 }
 
@@ -295,8 +283,8 @@ mod tests {
         let _ = std::fs::remove_file(&token_path);
 
         let builder = ApiBuilder::default().with_cache_dir(token_path.clone());
-        assert_eq!(builder.endpoint, "https://pephub-api.databio.org");
-        assert_eq!(builder.token, None);
+        assert_eq!(builder.cache.base_url(), "https://pephub-api.databio.org");
+        assert_eq!(builder.cache.token(), None);
 
         let _ = std::fs::remove_file(&token_path);
     }
@@ -315,7 +303,7 @@ mod tests {
     fn test_api_builder_with_token() {
         let token = "test-token-123";
         let builder = ApiBuilder::new().with_token(Some(token.to_string()));
-        assert_eq!(builder.token, Some(token.to_string()));
+        assert_eq!(builder.cache.token(), Some(token.to_string()));
     }
 
     #[rstest]

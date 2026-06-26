@@ -1,27 +1,28 @@
 use crate::cli::PHC;
 use colored::Colorize;
 use pephub_client::api;
+use pephub_client::auth::{Cache, CacheBuilder};
 use std::path::PathBuf;
-use pephub_client::auth::{CacheBuilder, Cache};
 
 use peprs_core::utils::save_raw_pep;
 
 pub fn phc_handler(command: &PHC) {
     match command {
         PHC::Login { token, url } => {
-            let mut cache_builder = match url {
-                Some(base_url) => {
-                    CacheBuilder::new().with_url(base_url.to_string())
-                },
-                None => CacheBuilder::new()
+            let cache_builder = match url {
+                Some(base_url) => CacheBuilder::new().with_url(base_url.to_string()),
+                None => CacheBuilder::new(),
             };
             match token {
                 Some(token_string) => {
                     println!("Token provided. Registering... ");
-                    let cache = cache_builder.with_token(token_string.to_string()).build().unwrap();
+                    let cache = cache_builder
+                        .with_token(token_string.to_string())
+                        .build()
+                        .unwrap();
                     cache.save_token().unwrap();
                     println!("Token successfully registered.");
-                },
+                }
                 None => {
                     cache_builder.build().unwrap().login().unwrap();
                 }

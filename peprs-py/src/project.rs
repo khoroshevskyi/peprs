@@ -245,7 +245,13 @@ impl PyProject {
 
         // Fetch the full project JSON (config + samples + subsamples)
         let raw = pephub.get_raw(registry.as_str()).map_err(|e| {
-            peprs_core::error::Error::Processing(format!("Failed to fetch from PepHub: {}", e))
+            if e.status_code() == Some(404) {
+                peprs_core::error::Error::Processing(
+                    "Project not found or user is unauthorized".to_string(),
+                )
+            } else {
+                peprs_core::error::Error::Processing(format!("Failed to fetch from PepHub: {}", e))
+            }
         })?;
 
         let raw_value: Value =
