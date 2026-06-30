@@ -43,8 +43,10 @@ pub fn phc_handler(command: &PHC) {
 
         PHC::Logout {} => {
             let cache = Cache::default();
-            cache.logout().unwrap();
-        }
+            if let Err(e) = cache.logout() {
+                eprintln!("Logout failed: {e}");
+                std::process::exit(1);
+            }
 
         PHC::Pull {
             registry,
