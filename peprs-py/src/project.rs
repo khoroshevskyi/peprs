@@ -206,7 +206,7 @@ impl PyProject {
 
         // 3. Subsamples
         let subsamples = match pep_dictionary.get_item("subsamples")? {
-            Some(subs_list) => {
+            Some(subs_list) if !subs_list.is_none() => {
                 let mut dfs = Vec::new();
                 for sub_item in subs_list.try_iter()? {
                     let sub_item = sub_item?;
@@ -215,7 +215,7 @@ impl PyProject {
                 }
                 Some(dfs)
             }
-            None => None,
+            _ => None,
         };
 
         // 4. Build
@@ -267,7 +267,7 @@ impl PyProject {
 
         // 2. Samples
         let samples_obj = raw_value
-            .get("sample_list")
+            .get("samples") // TODO: change to samples
             .ok_or_else(|| peprs_core::error::Error::invalid_format("Missing 'sample_list' key"))?;
         let samples_bytes = samples_obj.to_string();
         let samples_df = JsonReader::new(Cursor::new(samples_bytes.as_bytes()))
@@ -275,7 +275,8 @@ impl PyProject {
             .map_err(peprs_core::error::Error::Polars)?;
 
         // 3. Subsamples
-        let subsamples = match raw_value.get("subsample_list") {
+        let subsamples = match raw_value.get("subsamples") {
+            // TODO: change to subsamples
             Some(Value::Array(subs_list)) => {
                 let mut dfs = Vec::new();
                 for sub_item in subs_list {

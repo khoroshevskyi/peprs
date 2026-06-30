@@ -304,13 +304,13 @@ pub fn parse_raw_pep(
 
     // Samples
     let samples_obj = raw_value
-        .get("sample_list")
+        .get("samples")
         .ok_or_else(|| Error::invalid_format("Missing 'sample_list' key"))?;
     let samples_bytes = samples_obj.to_string();
     let samples = JsonReader::new(Cursor::new(samples_bytes.as_bytes())).finish()?;
 
     // Subsamples (optional)
-    let subsamples = match raw_value.get("subsample_list") {
+    let subsamples = match raw_value.get("subsamples") {
         Some(serde_json::Value::Array(subs_list)) => {
             let mut dfs = Vec::new();
             for sub_item in subs_list {
