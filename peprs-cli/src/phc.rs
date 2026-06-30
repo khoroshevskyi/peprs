@@ -60,7 +60,8 @@ pub fn phc_handler(command: &PHC) {
             file_name = file_name.replace("/", "_").replace(":", "_");
 
             if *zip {
-                if !path.ends_with(".zip") {
+                let has_zip_ext = path.extension().and_then(|e| e.to_str()) == Some("zip");
+                if !has_zip_ext {
                     file_name.push_str(".zip");
                     path = path.join(file_name);
                 }
