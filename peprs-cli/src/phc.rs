@@ -33,7 +33,10 @@ pub fn phc_handler(command: &PHC) {
                     println!("Token successfully registered.");
                 }
                 None => {
-                    cache_builder.build().unwrap().login().unwrap();
+                    if let Err(e) = cache_builder.build().and_then(|c| c.login()) {
+                        eprintln!("Login failed: {e}");
+                        std::process::exit(1);
+                    }
                 }
             };
         }
