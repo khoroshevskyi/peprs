@@ -25,7 +25,7 @@ pub enum ConvertFormat {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// PEPHub Client, for managing claude projects
+    /// PEPHub Client, for managing PEPHub projects
     Client {
         #[command(subcommand)]
         command: PHC,
