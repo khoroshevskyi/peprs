@@ -1,5 +1,5 @@
 use dirs::home_dir;
-use fs::read_to_string;
+use std::fs::read_to_string;
 use jsonwebtoken::dangerous::insecure_decode;
 use serde::{Deserialize, Serialize};
 use std::fs;
