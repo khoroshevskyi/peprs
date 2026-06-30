@@ -1,6 +1,8 @@
 name: Python tests
 # THIS file is not working yet. And skipped due to time consumed time
 on:
+  pull_request:
+    branches: [ "main" ]
   workflow_dispatch:
 
 env:
