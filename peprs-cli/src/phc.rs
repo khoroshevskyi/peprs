@@ -16,10 +16,7 @@ pub fn phc_handler(command: &PHC) {
             match token {
                 Some(token_string) => {
                     println!("Token provided. Registering... ");
-                    let cache = match cache_builder
-                        .with_token(token_string.to_string())
-                        .build()
-                    {
+                    let cache = match cache_builder.with_token(token_string.to_string()).build() {
                         Ok(c) => c,
                         Err(e) => {
                             eprintln!("Failed to initialize token cache: {e}");
@@ -47,6 +44,7 @@ pub fn phc_handler(command: &PHC) {
                 eprintln!("Logout failed: {e}");
                 std::process::exit(1);
             }
+        }
 
         PHC::Pull {
             registry,

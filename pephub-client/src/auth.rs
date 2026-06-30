@@ -1,8 +1,8 @@
 use dirs::home_dir;
-use std::fs::read_to_string;
 use jsonwebtoken::dangerous::insecure_decode;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::fs::read_to_string;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::thread;
