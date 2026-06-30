@@ -1,6 +1,5 @@
 use crate::error::ApiError;
 use std::collections::HashMap;
-use std::num::ParseIntError;
 use std::path::PathBuf;
 
 use peprs_core::config::ProjectConfig;
