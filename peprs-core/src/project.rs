@@ -15,8 +15,10 @@ use crate::error::Error;
 use crate::sample::{Sample, SamplesIter};
 use crate::utils::{
     build_derive_template_expr, extract_template_columns, resolve_csv_to_dataframe,
-    resolve_yaml_to_dataframe, write_raw_folder_parts, write_raw_zip_parts,
+    resolve_yaml_to_dataframe, write_raw_folder_parts,
 };
+#[cfg(feature = "zip")]
+use crate::utils::write_raw_zip_parts;
 #[cfg(feature = "wdl")]
 use crate::wdl::WdlInputParsingOptions;
 #[cfg(feature = "wdl")]

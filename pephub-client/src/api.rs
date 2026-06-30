@@ -82,7 +82,7 @@ impl ApiBuilder {
 
     /// Creates API with values potentially from environment variables.
     /// PH_HOME decides the location of the cache folder
-    /// PH_ENDPOINT modifies the URL for the pephub location
+    /// PEPHUB_BASE_URL modifies the URL for the pephub location
     /// to download files from.
     pub fn from_env() -> Self {
         let cache = Cache::default();

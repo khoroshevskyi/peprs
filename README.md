@@ -93,6 +93,13 @@ cargo install --path peprs-cli
 pip install peprs
 ```
 
+## 🔧 Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `PH_HOME` | `~/.pephubclient/` | Directory where the PEPHub auth cache (`jwt.toml`) is stored. |
+| `PEPHUB_BASE_URL` | `https://pephub-api.databio.org` | Overrides the PEPHub API endpoint used for login and `Project.from_pephub(...)`. |
+
 ## 🐍 Quick Python example
 
 ```python
