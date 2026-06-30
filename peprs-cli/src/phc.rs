@@ -16,11 +16,20 @@ pub fn phc_handler(command: &PHC) {
             match token {
                 Some(token_string) => {
                     println!("Token provided. Registering... ");
-                    let cache = cache_builder
+                    let cache = match cache_builder
                         .with_token(token_string.to_string())
                         .build()
-                        .unwrap();
-                    cache.save_token().unwrap();
+                    {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("Failed to initialize token cache: {e}");
+                            std::process::exit(1);
+                        }
+                    };
+                    if let Err(e) = cache.save_token() {
+                        eprintln!("Failed to save token: {e}");
+                        std::process::exit(1);
+                    }
                     println!("Token successfully registered.");
                 }
                 None => {
