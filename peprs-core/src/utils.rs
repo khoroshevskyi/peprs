@@ -391,11 +391,11 @@ mod tests {
     fn test_parse_and_save_raw_pep() {
         let raw = r#"{
             "config": {"pep_version": "2.1.0", "name": "test_proj", "description": "d"},
-            "sample_list": [
+            "samples": [
                 {"sample_name": "frog_1", "organism": "frog"},
                 {"sample_name": "frog_2", "organism": "frog"}
             ],
-            "subsample_list": [
+            "subsamples": [
                 [{"sample_name": "frog_1", "read": "r1"}]
             ]
         }"#;

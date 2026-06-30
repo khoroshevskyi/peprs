@@ -26,9 +26,11 @@ jobs:
       run: pip install uv
 
     - name: Create environment
+      working-directory: peprs-py
       run: uv venv
 
     - name: Install dependencies
+      working-directory: peprs-py
       run: uv pip install maturin pytest pyyaml polars pandas
 
     - name: Build and install peprs-py
