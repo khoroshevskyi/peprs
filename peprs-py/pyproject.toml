@@ -25,6 +25,7 @@ readme = "README.md"
 dynamic = ["version"]
 dependencies = [
     "polars>=1.0.0",
+    "pyarrow",
 ]
 
 [project.scripts]

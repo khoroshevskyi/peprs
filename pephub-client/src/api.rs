@@ -249,9 +249,28 @@ mod tests {
     use pretty_assertions::assert_eq;
     use rstest::*;
 
+    /// Builds an `ApiBuilder` backed by a dedicated temp-dir cache file. Goes through
+    /// `ApiBuilder::from_cache` rather than `ApiBuilder::default()`/`with_cache_dir`,
+    /// since the latter still touches the shared OS-default cache file first (then
+    /// discards it), which races with other tests doing the same thing.
+    fn test_api_builder(name: &str) -> ApiBuilder {
+        let token_path = std::env::temp_dir().join(format!("peprs_{name}_jwt.toml"));
+        let _ = std::fs::remove_file(&token_path);
+
+        let cache = CacheBuilder::new()
+            .with_token_path(token_path)
+            .build()
+            .expect("Failed to build cache");
+        ApiBuilder::from_cache(cache)
+    }
+
+    fn test_api(name: &str) -> Api {
+        test_api_builder(name).build().expect("Failed to build API")
+    }
+
     #[rstest]
     fn test_get_config_databio_example() {
-        let api = Api::new().expect("Failed to create API client");
+        let api = test_api("test_get_config_databio_example");
         let result = api.get_config("databio/example");
         assert_eq!(result.is_ok(), true);
         assert_eq!(result.unwrap().pep_version, "2.1.0");
@@ -259,7 +278,7 @@ mod tests {
 
     #[rstest]
     fn test_get_samples_databio_example() {
-        let api = Api::new().expect("Failed to create API client");
+        let api = test_api("test_get_samples_databio_example");
         let result = api.get_samples("databio/example");
         assert_eq!(result.is_ok(), true);
 
@@ -270,29 +289,22 @@ mod tests {
 
     #[rstest]
     fn test_get_samples_invalid_registry() {
-        let api = Api::new().expect("Failed to create API client");
+        let api = test_api("test_get_samples_invalid_registry");
         let result = api.get_samples("invalid/nonexistent");
         assert_eq!(result.is_err(), true);
     }
 
     #[rstest]
     fn test_api_builder_default() {
-        // Use a token path that does not exist so the result is independent of any
-        // real cached login on the machine running the tests.
-        let token_path = std::env::temp_dir().join("peprs_api_builder_default_test_jwt.toml");
-        let _ = std::fs::remove_file(&token_path);
-
-        let builder = ApiBuilder::default().with_cache_dir(token_path.clone());
+        let builder = test_api_builder("test_api_builder_default");
         assert_eq!(builder.cache.base_url(), "https://pephub-api.databio.org");
         assert_eq!(builder.cache.token(), None);
-
-        let _ = std::fs::remove_file(&token_path);
     }
 
     #[rstest]
     fn test_api_builder_with_endpoint() {
         let custom_endpoint = "https://custom-endpoint.com";
-        let api = ApiBuilder::new()
+        let api = test_api_builder("test_api_builder_with_endpoint")
             .with_endpoint(custom_endpoint.to_string())
             .build()
             .expect("Failed to build API");
@@ -302,13 +314,14 @@ mod tests {
     #[rstest]
     fn test_api_builder_with_token() {
         let token = "test-token-123";
-        let builder = ApiBuilder::new().with_token(Some(token.to_string()));
+        let builder =
+            test_api_builder("test_api_builder_with_token").with_token(Some(token.to_string()));
         assert_eq!(builder.cache.token(), Some(token.to_string()));
     }
 
     #[rstest]
     fn test_get_config_invalid_registry() {
-        let api = Api::new().expect("Failed to create API client");
+        let api = test_api("test_get_config_invalid_registry");
         let result = api.get_config("invalid/nonexistent");
         assert_eq!(result.is_err(), true);
     }

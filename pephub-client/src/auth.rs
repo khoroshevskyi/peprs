@@ -334,8 +334,19 @@ mod tests {
 
     #[test]
     fn test_init_cache() {
-        let cache = Cache::default();
-        assert_eq!(cache.token_path, default_token_path());
+        // Use a dedicated temp-dir token path instead of `Cache::default()` (which
+        // reads/writes the shared OS-default file), so this test can't race with
+        // other tests that also build a default cache.
+        let token_path = std::env::temp_dir().join("peprs_test_init_cache_jwt.toml");
+        let _ = fs::remove_file(&token_path);
+
+        let cache = CacheBuilder::new()
+            .with_token_path(&token_path)
+            .build()
+            .expect("build should succeed");
+        assert_eq!(cache.token_path, token_path);
+
+        let _ = fs::remove_file(&token_path);
     }
 
     // Example PEPHub JWT (HS256) with `exp` = 1784833275.
