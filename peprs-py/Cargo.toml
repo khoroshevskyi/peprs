@@ -18,7 +18,7 @@ serde_json = "1.0.145"
 
 
 peprs-core = { path = "../peprs-core", version = "0.2.0" }
-peprs-eido = { path = "../peprs-eido", version = "0.1.0" }
+peprs-eido = { path = "../peprs-eido", version = "0.2.0" }
 peprs-cli = { path = "../peprs-cli" }
 
 tracing = { workspace = true }
