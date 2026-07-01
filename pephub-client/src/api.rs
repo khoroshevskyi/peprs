@@ -1,21 +1,18 @@
+use crate::error::ApiError;
 use std::collections::HashMap;
-use std::num::ParseIntError;
 use std::path::PathBuf;
-
-use thiserror::Error;
 
 use peprs_core::config::ProjectConfig;
 use serde::Deserialize;
 use ureq::config::ConfigBuilder;
 use ureq::config::RedirectAuthHeaders;
 use ureq::tls::{TlsConfig, TlsProvider};
-use ureq::typestate::{AgentScope, WithoutBody};
+use ureq::typestate::{AgentScope, WithBody, WithoutBody};
 use ureq::{Agent, RequestBuilder};
 
-use crate::cache::Cache;
+use crate::auth::{Cache, CacheBuilder};
 
-const PH_ENDPOINT_ENV_VAR: &str = "PH_ENDPOINT";
-
+const PH_ENDPOINT_ENV_VAR: &str = "PEPHUB_BASE_URL";
 /// Current version (used in user-agent)
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Current name (used in user-agent)
@@ -24,18 +21,23 @@ const USER_AGENT: &str = "User-Agent";
 const AUTHORIZATION: &str = "Authorization";
 
 type HeaderMap = HashMap<&'static str, String>;
-type HeaderName = &'static str;
 
 /// Simple wrapper over [`ureq::Agent`] to include default headers
 #[derive(Clone, Debug)]
-pub struct HeaderAgent {
+pub(crate) struct HeaderAgent {
     agent: Agent,
     headers: HeaderMap,
 }
 
 impl HeaderAgent {
-    fn new(agent: Agent, headers: HeaderMap) -> Self {
+    pub(crate) fn new(agent: Agent, headers: HeaderMap) -> Self {
         Self { agent, headers }
+    }
+
+    /// Builds a [`HeaderAgent`] with no default headers, for unauthenticated requests.
+    pub(crate) fn unauthenticated() -> Result<Self, ApiError> {
+        let agent: Agent = builder()?.build().into();
+        Ok(Self::new(agent, HeaderMap::new()))
     }
 
     fn get(&self, url: &str) -> RequestBuilder<WithoutBody> {
@@ -45,14 +47,23 @@ impl HeaderAgent {
         }
         request
     }
+
+    pub(crate) fn post(&self, url: &str) -> RequestBuilder<WithBody> {
+        let mut request = self.agent.post(url);
+        for (header, value) in &self.headers {
+            request = request.header(*header, value);
+        }
+        request
+    }
 }
 
 /// Helper to create [`Api`] with all the options.
+///
+/// The token and endpoint live in [`cache`](Self::cache) (its `Token` holds both the JWT and
+/// the base url), so it is the single source of truth.
 #[derive(Debug)]
 pub struct ApiBuilder {
-    endpoint: String,
-    cache: Cache,
-    token: Option<String>,
+    pub cache: Cache,
     user_agent: Vec<(String, String)>,
 }
 
@@ -71,10 +82,10 @@ impl ApiBuilder {
 
     /// Creates API with values potentially from environment variables.
     /// PH_HOME decides the location of the cache folder
-    /// PH_ENDPOINT modifies the URL for the pephub location
+    /// PEPHUB_BASE_URL modifies the URL for the pephub location
     /// to download files from.
     pub fn from_env() -> Self {
-        let cache = Cache::from_env();
+        let cache = Cache::default();
         let mut builder = Self::from_cache(cache);
         if let Ok(endpoint) = std::env::var(PH_ENDPOINT_ENV_VAR) {
             builder = builder.with_endpoint(endpoint);
@@ -84,39 +95,34 @@ impl ApiBuilder {
 
     /// From a given cache
     pub fn from_cache(cache: Cache) -> Self {
-        let token = cache.token();
-
-        let endpoint = "https://pephub-api.databio.org".to_string();
-
         let user_agent = vec![
             ("unknown".to_string(), "None".to_string()),
             (NAME.to_string(), VERSION.to_string()),
             ("rust".to_string(), "unknown".to_string()),
         ];
 
-        Self {
-            endpoint,
-            cache,
-            token,
-            user_agent,
-        }
+        Self { cache, user_agent }
     }
 
     /// Changes the endpoint of the API. Default is `https://pephub-api.databio.org/`.
     pub fn with_endpoint(mut self, endpoint: String) -> Self {
-        self.endpoint = endpoint;
+        self.cache.token.base_url = endpoint.trim_end_matches('/').to_string();
         self
     }
 
-    /// Changes the location of the cache directory. Defaults is `~/.cache/pephub/`.
-    pub fn with_cache_dir(mut self, cache_dir: PathBuf) -> Self {
-        self.cache = Cache::new(cache_dir);
+    /// Changes the location of the token file. Defaults to `$PH_HOME/jwt.toml`
+    /// (falling back to `~/.pephubclient/jwt.toml`).
+    pub fn with_cache_dir(mut self, token_path: PathBuf) -> Self {
+        self.cache = CacheBuilder::new()
+            .with_token_path(token_path)
+            .build()
+            .expect("Failed to load token cache");
         self
     }
 
     /// Sets the token to be used in the API
     pub fn with_token(mut self, token: Option<String>) -> Self {
-        self.token = token;
+        self.cache.token.token = token;
         self
     }
 
@@ -135,7 +141,7 @@ impl ApiBuilder {
             .collect::<Vec<_>>()
             .join("; ");
         headers.insert(USER_AGENT, user_agent.to_string());
-        if let Some(token) = &self.token {
+        if let Some(token) = self.cache.token() {
             headers.insert(AUTHORIZATION, format!("Bearer {token}"));
         }
         headers
@@ -144,15 +150,13 @@ impl ApiBuilder {
     /// Consumes the builder and builds the final [`Api`]
     pub fn build(self) -> Result<Api, ApiError> {
         let headers = self.build_headers();
+        let endpoint = self.cache.base_url().trim_end_matches('/').to_string();
 
         let builder = builder()?.redirect_auth_headers(RedirectAuthHeaders::SameHost);
         let agent: Agent = builder.build().into();
         let client = HeaderAgent::new(agent, headers.clone());
 
-        Ok(Api {
-            endpoint: self.endpoint,
-            client,
-        })
+        Ok(Api { endpoint, client })
     }
 }
 
@@ -238,51 +242,34 @@ impl Api {
     }
 }
 
-#[derive(Debug, Error)]
-/// All errors the API can throw
-pub enum ApiError {
-    /// Api expects certain header to be present in the results to derive some information
-    #[error("Header {0} is missing")]
-    MissingHeader(HeaderName),
-
-    /// The header exists, but the value is not conform to what the Api expects.
-    #[error("Header {0} is invalid")]
-    InvalidHeader(HeaderName),
-
-    /// Error in the request
-    #[error("request error: {0}")]
-    RequestError(#[from] Box<ureq::Error>),
-
-    /// Error parsing some range value
-    #[error("Cannot parse int")]
-    ParseIntError(#[from] ParseIntError),
-
-    /// I/O Error
-    #[error("I/O error {0}")]
-    IoError(#[from] std::io::Error),
-
-    /// We tried to download chunk too many times
-    #[error("Too many retries: {0}")]
-    TooManyRetries(Box<ApiError>),
-
-    /// The part file is corrupted
-    #[error("Invalid part file - corrupted file")]
-    InvalidResume,
-
-    /// Error parsing YAML configuration
-    #[error("YAML parse error: {0}")]
-    YamlParseError(#[from] Box<serde_yaml::Error>),
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
     use rstest::*;
 
+    /// Builds an `ApiBuilder` backed by a dedicated temp-dir cache file. Goes through
+    /// `ApiBuilder::from_cache` rather than `ApiBuilder::default()`/`with_cache_dir`,
+    /// since the latter still touches the shared OS-default cache file first (then
+    /// discards it), which races with other tests doing the same thing.
+    fn test_api_builder(name: &str) -> ApiBuilder {
+        let token_path = std::env::temp_dir().join(format!("peprs_{name}_jwt.toml"));
+        let _ = std::fs::remove_file(&token_path);
+
+        let cache = CacheBuilder::new()
+            .with_token_path(token_path)
+            .build()
+            .expect("Failed to build cache");
+        ApiBuilder::from_cache(cache)
+    }
+
+    fn test_api(name: &str) -> Api {
+        test_api_builder(name).build().expect("Failed to build API")
+    }
+
     #[rstest]
     fn test_get_config_databio_example() {
-        let api = Api::new().expect("Failed to create API client");
+        let api = test_api("test_get_config_databio_example");
         let result = api.get_config("databio/example");
         assert_eq!(result.is_ok(), true);
         assert_eq!(result.unwrap().pep_version, "2.1.0");
@@ -290,7 +277,7 @@ mod tests {
 
     #[rstest]
     fn test_get_samples_databio_example() {
-        let api = Api::new().expect("Failed to create API client");
+        let api = test_api("test_get_samples_databio_example");
         let result = api.get_samples("databio/example");
         assert_eq!(result.is_ok(), true);
 
@@ -301,22 +288,22 @@ mod tests {
 
     #[rstest]
     fn test_get_samples_invalid_registry() {
-        let api = Api::new().expect("Failed to create API client");
+        let api = test_api("test_get_samples_invalid_registry");
         let result = api.get_samples("invalid/nonexistent");
         assert_eq!(result.is_err(), true);
     }
 
     #[rstest]
     fn test_api_builder_default() {
-        let builder = ApiBuilder::default();
-        assert_eq!(builder.endpoint, "https://pephub-api.databio.org");
-        assert_eq!(builder.token, None);
+        let builder = test_api_builder("test_api_builder_default");
+        assert_eq!(builder.cache.base_url(), "https://pephub-api.databio.org");
+        assert_eq!(builder.cache.token(), None);
     }
 
     #[rstest]
     fn test_api_builder_with_endpoint() {
         let custom_endpoint = "https://custom-endpoint.com";
-        let api = ApiBuilder::new()
+        let api = test_api_builder("test_api_builder_with_endpoint")
             .with_endpoint(custom_endpoint.to_string())
             .build()
             .expect("Failed to build API");
@@ -326,13 +313,14 @@ mod tests {
     #[rstest]
     fn test_api_builder_with_token() {
         let token = "test-token-123";
-        let builder = ApiBuilder::new().with_token(Some(token.to_string()));
-        assert_eq!(builder.token, Some(token.to_string()));
+        let builder =
+            test_api_builder("test_api_builder_with_token").with_token(Some(token.to_string()));
+        assert_eq!(builder.cache.token(), Some(token.to_string()));
     }
 
     #[rstest]
     fn test_get_config_invalid_registry() {
-        let api = Api::new().expect("Failed to create API client");
+        let api = test_api("test_get_config_invalid_registry");
         let result = api.get_config("invalid/nonexistent");
         assert_eq!(result.is_err(), true);
     }

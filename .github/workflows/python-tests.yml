@@ -1,6 +1,8 @@
 name: Python tests
 # THIS file is not working yet. And skipped due to time consumed time
 on:
+  pull_request:
+    branches: [ "main" ]
   workflow_dispatch:
 
 env:
@@ -24,9 +26,11 @@ jobs:
       run: pip install uv
 
     - name: Create environment
+      working-directory: peprs-py
       run: uv venv
 
     - name: Install dependencies
+      working-directory: peprs-py
       run: uv pip install maturin pytest pyyaml polars pandas
 
     - name: Build and install peprs-py

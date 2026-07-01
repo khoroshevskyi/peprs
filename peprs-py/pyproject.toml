@@ -23,6 +23,10 @@ classifiers = [
 ]
 readme = "README.md"
 dynamic = ["version"]
+dependencies = [
+    "polars>=1.0.0",
+    "pyarrow>=24.0.0",
+]
 
 [project.scripts]
 peprs = "peprs:_cli_main"

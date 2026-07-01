@@ -1,4 +1,5 @@
 pub mod cli;
+pub mod phc;
 
 use clap::Parser;
 use peprs_core::project::Project;
@@ -212,5 +213,6 @@ fn run_cli(cli: crate::cli::Cli) {
                 std::process::exit(1);
             }
         },
+        Commands::Client { command } => phc::phc_handler(command),
     }
 }
