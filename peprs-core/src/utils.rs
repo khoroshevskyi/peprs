@@ -5,7 +5,6 @@ use std::sync::LazyLock;
 
 use crate::config::ProjectConfig;
 use crate::error::Error;
-use crate::project::Project;
 use polars::prelude::*;
 use regex::Regex;
 use serde_json::Value;
