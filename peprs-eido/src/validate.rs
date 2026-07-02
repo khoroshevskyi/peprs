@@ -269,18 +269,30 @@ fn format_schema_error(error: &jsonschema::ValidationError, schema: &Value) -> S
     let schema_path = error.schema_path.to_string();
     if let Some(any_of_node) = navigate_json_pointer(schema, &schema_path) {
         if let Some(variants) = any_of_node.as_array() {
+            let actual = json_type_name(&error.instance);
+            let field = error.instance_path.to_string();
+            let field_label = if field.is_empty() {
+                String::new()
+            } else {
+                format!(" at '{field}'")
+            };
+
+            // If a variant matches the actual type but still rejected the value, the
+            // failure is due to that variant's own constraint (enum, pattern, ...), not
+            // a type mismatch. Report the real constraint.
+            for variant in variants {
+                if variant.get("type").and_then(|t| t.as_str()) == Some(actual) {
+                    if let Some(msg) = describe_constraint_violation(variant, &field_label) {
+                        return msg;
+                    }
+                }
+            }
+
             let expected: Vec<&str> = variants
                 .iter()
                 .filter_map(|v| v.get("type").and_then(|t| t.as_str()))
                 .collect();
             if !expected.is_empty() {
-                let actual = json_type_name(&error.instance);
-                let field = error.instance_path.to_string();
-                let field_label = if field.is_empty() {
-                    String::new()
-                } else {
-                    format!(" at '{field}'")
-                };
                 return format!(
                     "type mismatch{field_label}: got {actual}, expected {}",
                     expected.join(" or ")
@@ -291,6 +303,63 @@ fn format_schema_error(error: &jsonschema::ValidationError, schema: &Value) -> S
 
     // Fallback to default message if we can't extract better info
     error.to_string()
+}
+
+/// Describe why a same-typed anyOf variant rejected the value, based on its constraint
+/// keywords. Returns None if the variant carries no recognized constraint.
+fn describe_constraint_violation(variant: &Value, field_label: &str) -> Option<String> {
+    if let Some(vals) = variant.get("enum").and_then(|e| e.as_array()) {
+        let allowed: Vec<String> = vals.iter().map(render_constraint_value).collect();
+        return Some(format!(
+            "invalid value{field_label}: must be one of: {}",
+            allowed.join(", ")
+        ));
+    }
+    if let Some(p) = variant.get("pattern").and_then(|p| p.as_str()) {
+        return Some(format!(
+            "invalid value{field_label}: must match pattern {p}"
+        ));
+    }
+    if let Some(f) = variant.get("format").and_then(|f| f.as_str()) {
+        return Some(format!("invalid value{field_label}: must be a valid {f}"));
+    }
+    match (
+        variant.get("minLength").and_then(|v| v.as_u64()),
+        variant.get("maxLength").and_then(|v| v.as_u64()),
+    ) {
+        (Some(min), Some(max)) => {
+            return Some(format!(
+                "invalid value{field_label}: length must be between {min} and {max}"
+            ));
+        }
+        (Some(min), None) => {
+            return Some(format!(
+                "invalid value{field_label}: length must be at least {min}"
+            ));
+        }
+        (None, Some(max)) => {
+            return Some(format!(
+                "invalid value{field_label}: length must be at most {max}"
+            ));
+        }
+        (None, None) => {}
+    }
+    match (variant.get("minimum"), variant.get("maximum")) {
+        (Some(min), Some(max)) => Some(format!(
+            "invalid value{field_label}: must be between {min} and {max}"
+        )),
+        (Some(min), None) => Some(format!("invalid value{field_label}: must be >= {min}")),
+        (None, Some(max)) => Some(format!("invalid value{field_label}: must be <= {max}")),
+        (None, None) => None,
+    }
+}
+
+/// Render a constraint value: bare string for strings, JSON form otherwise.
+fn render_constraint_value(v: &Value) -> String {
+    match v {
+        Value::String(s) => s.clone(),
+        other => other.to_string(),
+    }
 }
 
 /// Return the JSON type name of a serde_json::Value.
