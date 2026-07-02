@@ -42,7 +42,7 @@ pub fn eido_error_to_pyerr(py: Python<'_>, err: EidoError) -> PyErr {
 }
 
 fn classify_error(error: &ValidationError) -> &'static str {
-    if error.message.starts_with("type mismatch") {
+    if error.message.starts_with("type mismatch") || error.message.starts_with("invalid value") {
         "type_mismatch"
     } else if error.message.ends_with("is a required property") {
         "missing_required"

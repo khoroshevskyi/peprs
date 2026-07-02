@@ -245,9 +245,15 @@ fn test_validate_value_check() {
         .expect("Failed to load schema");
     let project = load_project("value_check_pep");
     let result = peprs_eido::validate_with_schema(&project, &schema);
+    let Err(peprs_eido::error::EidoError::Validation(errors)) = result else {
+        panic!("Expected validation to fail: format_type has invalid enum values");
+    };
+    // The message should name the allowed enum values, not a bogus type mismatch.
     assert!(
-        result.is_err(),
-        "Expected validation to fail: format_type has invalid enum values"
+        errors.iter().any(|e| e.message
+            == "invalid value at '/format_type': must be one of: narrowPeak, broadPeak"),
+        "Expected an enum-value message, got: {:?}",
+        errors.iter().map(|e| &e.message).collect::<Vec<_>>()
     );
 }
 
