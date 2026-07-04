@@ -1,8 +1,25 @@
 use crate::error::Result;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
+
+///
+/// Deserialize a `subsample_table_index` that may be either a single string
+/// or a sequence of strings, normalizing both to `Option<Vec<String>>`.
+///
+fn deserialize_string_or_vec<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<Vec<String>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt = Option::<SubsampleTableIndex>::deserialize(deserializer)?;
+    Ok(opt.map(|val| match val {
+        SubsampleTableIndex::Single(s) => vec![s],
+        SubsampleTableIndex::Multiple(v) => v,
+    }))
+}
 
 use crate::consts::DEFAULT_PEP_VERSION;
 
