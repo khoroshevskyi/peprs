@@ -8,7 +8,9 @@ use std::path::Path;
 /// Deserialize a `subsample_table_index` that may be either a single string
 /// or a sequence of strings, normalizing both to `Option<Vec<String>>`.
 ///
-fn deserialize_string_or_vec<'de, D>(deserializer: D) -> std::result::Result<Option<Vec<String>>, D::Error>
+fn deserialize_string_or_vec<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<Vec<String>>, D::Error>
 where
     D: Deserializer<'de>,
 {
