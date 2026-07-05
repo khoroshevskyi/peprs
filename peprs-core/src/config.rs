@@ -34,6 +34,7 @@ pub struct ProjectConfig {
     pub sample_table: Option<String>,
     pub subsample_table: Option<SubsampleTable>,
     pub sample_table_index: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_string_or_vec")]
     pub subsample_table_index: Option<Vec<String>>,
     pub sample_modifiers: Option<SampleModifiers>,
     pub project_modifiers: Option<ProjectModifiers>,
