@@ -1,4 +1,5 @@
 use std::io::Cursor;
+use std::num::NonZeroUsize;
 
 use peprs_core::config::ProjectConfig;
 use peprs_core::project::Project;
@@ -43,6 +44,7 @@ impl WasmProject {
             .ok_or_else(|| JsError::new("Missing 'sample_list' or 'samples' key"))?;
         let samples_bytes = samples_obj.to_string();
         let samples_df = JsonReader::new(Cursor::new(samples_bytes.as_bytes()))
+            .infer_schema_len(NonZeroUsize::new(10_000))
             .finish()
             .map_err(|e| JsError::new(&format!("Failed to parse samples: {e}")))?;
 
@@ -56,6 +58,7 @@ impl WasmProject {
                 for sub_item in subs_list {
                     let sub_bytes = sub_item.to_string();
                     let sub_df = JsonReader::new(Cursor::new(sub_bytes.as_bytes()))
+                        .infer_schema_len(NonZeroUsize::new(10_000))
                         .finish()
                         .map_err(|e| JsError::new(&format!("Failed to parse subsample: {e}")))?;
                     dfs.push(sub_df);
