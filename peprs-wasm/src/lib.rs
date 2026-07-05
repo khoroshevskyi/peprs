@@ -12,6 +12,9 @@ use serde::Serialize;
 use serde_json::Value;
 use wasm_bindgen::prelude::*;
 
+/// Number of rows Polars scans to infer JSON column types.
+const INFER_SCHEMA_LEN: Option<NonZeroUsize> = NonZeroUsize::new(10_000);
+
 #[wasm_bindgen(start)]
 pub fn init() {
     console_error_panic_hook::set_once();
@@ -44,7 +47,7 @@ impl WasmProject {
             .ok_or_else(|| JsError::new("Missing 'sample_list' or 'samples' key"))?;
         let samples_bytes = samples_obj.to_string();
         let samples_df = JsonReader::new(Cursor::new(samples_bytes.as_bytes()))
-            .infer_schema_len(NonZeroUsize::new(10_000))
+            .infer_schema_len(INFER_SCHEMA_LEN)
             .finish()
             .map_err(|e| JsError::new(&format!("Failed to parse samples: {e}")))?;
 
@@ -58,7 +61,7 @@ impl WasmProject {
                 for sub_item in subs_list {
                     let sub_bytes = sub_item.to_string();
                     let sub_df = JsonReader::new(Cursor::new(sub_bytes.as_bytes()))
-                        .infer_schema_len(NonZeroUsize::new(10_000))
+                        .infer_schema_len(INFER_SCHEMA_LEN)
                         .finish()
                         .map_err(|e| JsError::new(&format!("Failed to parse subsample: {e}")))?;
                     dfs.push(sub_df);
