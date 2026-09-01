@@ -84,6 +84,24 @@ class Project:
     samples: SamplesIter
     """Iterator over processed samples. Each element is a ``Sample`` object."""
 
+    sample_table: PandasDataFrame
+    """Deprecated ``peppy``-compatible alias for :meth:`to_pandas`.
+
+    Processed sample table as a Pandas DataFrame indexed by the sample-name
+    column (default ``sample_name``), kept as a column too, so both
+    ``pep.sample_table["<col>"]`` and ``pep.sample_table.loc["<sample_name>"]``
+    behave as under peppy.
+
+    .. deprecated::
+        Accessing this property emits a ``DeprecationWarning`` and it will be
+        removed in a future release. Use :meth:`to_pandas` instead.
+    """
+
+    subsample_table: Optional[PolarsDataFrame]
+    """Flat subsample table as a Polars DataFrame, formed by concatenating the
+    project's subsample tables vertically, or ``None`` if the project defines no
+    subsamples."""
+
     def __init__(
         self,
         path: str,
@@ -180,7 +198,12 @@ class Project:
         ...
 
     def to_pandas(self, raw: bool = False) -> PandasDataFrame:
-        """Return the samples as a Pandas DataFrame.
+        """Return the samples as a Pandas DataFrame indexed by the sample-name column.
+
+        The frame is indexed by the sample table index column (default
+        ``sample_name``) without dropping it, mirroring peppy's sample table so
+        that both ``df["<col>"]`` and ``df.loc["<sample_name>"]`` work. If the
+        index column is absent, the frame keeps its default range index.
 
         :param raw: if True, return raw (unprocessed) samples; otherwise processed
         :return: Pandas DataFrame of samples
