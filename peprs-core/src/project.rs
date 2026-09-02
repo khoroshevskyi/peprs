@@ -948,8 +948,8 @@ impl Project {
     ) -> Result<Self, Error> {
         let sample_table_index = config
             .sample_table_index
-            .as_deref()
-            .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX);
+            .clone()
+            .unwrap_or_else(|| DEFAULT_SAMPLE_TABLE_INDEX.to_string());
 
         let subsample_indexes: Option<Vec<String>> = match subsamples {
             Some(_) => Some(
@@ -961,7 +961,51 @@ impl Project {
             _ => None,
         };
 
-        let mut samples_lf = Some(samples_df_raw.clone().lazy());
+        let samples = Self::compute_processed_samples(
+            &config,
+            &samples_df_raw,
+            subsamples.as_ref(),
+            &sample_table_index,
+        )?;
+
+        Ok(Self {
+            sample_table_index,
+            config: Some(config),
+            samples,
+            samples_raw: samples_df_raw,
+            subsamples,
+            subsample_table_index: subsample_indexes,
+            config_path: None,
+        })
+    }
+
+    ///
+    /// Apply the config's sample modifiers and subsample merge to a raw sample
+    /// table, producing the processed sample table.
+    ///
+    /// This is the shared processing pipeline used both when a project is first
+    /// built and when it is [reprocessed](Self::reprocess). It operates purely on
+    /// the in-memory arguments and never reads from disk.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The project configuration whose modifiers are applied.
+    /// * `samples_df_raw` - The raw (unprocessed) sample table.
+    /// * `subsamples` - Optional subsample tables to merge.
+    /// * `sample_table_index` - Name of the sample index column.
+    ///
+    /// # Returns
+    ///
+    /// The processed sample table as a `DataFrame`.
+    ///
+    fn compute_processed_samples(
+        config: &ProjectConfig,
+        samples_df_raw: &DataFrame,
+        subsamples: Option<&Vec<DataFrame>>,
+        sample_table_index: &str,
+    ) -> Result<DataFrame, Error> {
+        let base: DataFrame = samples_df_raw.clone();
+        let mut samples_lf = Some(base.lazy());
 
         // apply modifiers if they exist and if there is a sample table
         #[allow(clippy::collapsible_if)]
@@ -1039,7 +1083,7 @@ impl Project {
 
         // merge subsamples after modifiers: aggregate each subsample table by index,
         // then left-join onto samples. Subsample columns become list-typed.
-        if let Some(ref sub_dfs) = subsamples {
+        if let Some(sub_dfs) = subsamples {
             if let Some(lf) = samples_lf.take() {
                 samples_lf = Some(Self::merge_subsamples(lf, sub_dfs, sample_table_index)?);
             }
@@ -1057,40 +1101,87 @@ impl Project {
 
         // finally, collect the lazy frame
         let samples = match samples_lf {
-            Some(lf) => Some(lf.collect()?),
-            None => None,
+            Some(lf) => lf.collect()?,
+            None => DataFrame::empty(),
         };
 
         // check sample_table_index column exists and for duplicates (after modifiers,
         // since sample_table_index column may be created by append/derive)
-        if let Some(ref final_df) = samples {
-            if final_df.height() > 0 {
-                let sample_col = final_df.column(sample_table_index).map_err(|_| {
-                    Error::config(format!(
-                        "Sample table index column '{}' not found after applying modifiers. \
-                         Ensure the column exists in the sample table or is created by sample_modifiers.",
-                        sample_table_index
-                    ))
-                })?;
-                let has_duplicates = sample_col.n_unique()? < sample_col.len();
-                if has_duplicates {
-                    warn!(
-                        "Sample table contains duplicated samples, bugs can appear. \
-                         We strongly encourage using subsample tables!"
-                    );
-                }
+        if samples.height() > 0 {
+            let sample_col = samples.column(sample_table_index).map_err(|_| {
+                Error::config(format!(
+                    "Sample table index column '{}' not found after applying modifiers. \
+                     Ensure the column exists in the sample table or is created by sample_modifiers.",
+                    sample_table_index
+                ))
+            })?;
+            let has_duplicates = sample_col.n_unique()? < sample_col.len();
+            if has_duplicates {
+                warn!(
+                    "Sample table contains duplicated samples, bugs can appear. \
+                     We strongly encourage using subsample tables!"
+                );
             }
         }
 
-        Ok(Self {
-            sample_table_index: sample_table_index.to_owned(),
-            config: Some(config),
-            samples: samples.unwrap_or(DataFrame::empty()),
-            samples_raw: samples_df_raw,
-            subsamples,
-            subsample_table_index: subsample_indexes,
-            config_path: None,
-        })
+        Ok(samples)
+    }
+
+    ///
+    /// Re-run the sample-processing pipeline using the current in-memory config
+    /// and raw sample/subsample tables, without reading anything from disk.
+    ///
+    /// Recomputes [`samples`](Self::samples) from [`samples_raw`](Self::samples_raw)
+    /// and [`subsamples`](Self::subsamples) by re-applying the config's sample
+    /// modifiers and subsample merge. Use this after changing the in-memory
+    /// config so the processed sample table reflects the changes.
+    ///
+    /// Note: this does not re-apply project modifiers (imports/amendments), which
+    /// require disk access and are already baked into the loaded config.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` on success, or an error if the config is missing or processing
+    /// fails.
+    ///
+    pub fn reprocess(&mut self) -> Result<(), Error> {
+        let (sample_table_index, subsample_index, samples) = {
+            let config = self
+                .config
+                .as_ref()
+                .ok_or_else(|| Error::config("Cannot reprocess a project without a config."))?;
+
+            let sample_table_index = config
+                .sample_table_index
+                .clone()
+                .unwrap_or_else(|| DEFAULT_SAMPLE_TABLE_INDEX.to_string());
+
+            let samples = Self::compute_processed_samples(
+                config,
+                &self.samples_raw,
+                self.subsamples.as_ref(),
+                &sample_table_index,
+            )?;
+
+            let subsample_index = if self.subsamples.is_some() {
+                Some(
+                    config
+                        .subsample_table_index
+                        .clone()
+                        .unwrap_or(vec![DEFAULT_SUBSAMPLE_TABLE_INDEX.to_string()]),
+                )
+            } else {
+                None
+            };
+
+            (sample_table_index, subsample_index, samples)
+        };
+
+        self.samples = samples;
+        self.sample_table_index = sample_table_index;
+        self.subsample_table_index = subsample_index;
+
+        Ok(())
     }
 
     ///
@@ -1636,6 +1727,57 @@ mod tests {
                 .activate_amendments(&["whatever".to_string()])
                 .is_err()
         );
+    }
+
+    #[rstest]
+    fn reprocess_applies_config_change(basic_pep: &'static str) {
+        use crate::config::SampleModifiers;
+        use std::collections::HashMap;
+
+        let mut proj = Project::from_config(basic_pep).build().unwrap();
+        // basic pep has no `read_type` column before any modifier is applied
+        assert!(proj.samples.column("read_type").is_err());
+
+        // add an APPEND modifier to the in-memory config, then reprocess
+        let mut append = HashMap::new();
+        append.insert("read_type".to_string(), "SINGLE".to_string());
+        proj.config.as_mut().unwrap().sample_modifiers = Some(SampleModifiers {
+            remove: None,
+            append: Some(append),
+            duplicate: None,
+            imply: None,
+            derive: None,
+        });
+
+        proj.reprocess().unwrap();
+
+        // the new column is now present with the appended value on every row
+        let read_type: Vec<String> = proj
+            .samples
+            .column("read_type")
+            .unwrap()
+            .str()
+            .unwrap()
+            .iter()
+            .flatten()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(read_type, vec!["SINGLE"; proj.len()]);
+
+        // reprocess is idempotent: running again keeps the same result
+        proj.reprocess().unwrap();
+        assert_eq!(proj.samples.column("read_type").unwrap().len(), proj.len());
+    }
+
+    #[rstest]
+    fn reprocess_preserves_raw_samples(basic_pep: &'static str) {
+        let mut proj = Project::from_config(basic_pep).build().unwrap();
+        let raw_before = proj.samples_raw.clone();
+        proj.reprocess().unwrap();
+        // reprocessing recomputes `samples` from `samples_raw` and leaves the raw
+        // table untouched
+        assert!(proj.samples_raw.equals(&raw_before));
+        assert_eq!(proj.len(), 2);
     }
 
     #[rstest]
