@@ -269,6 +269,22 @@ class Project:
         """
         ...
 
+    def list_amendments(self) -> List[str]:
+        """Return the names of amendments defined in the PEP config.
+
+        :raises ValueError: if the PEP defines no amendments
+        """
+        ...
+
+    def activate_amendments(self, amendments: List[str]) -> None:
+        """Activate one or more amendments, reloading the project from its config.
+
+        :param amendments: amendment names to activate
+        :raises ValueError: if the PEP defines no amendments, was not loaded
+            from a config file, or names an amendment that does not exist
+        """
+        ...
+
     def len(self) -> int:
         """Return the number of samples in the project."""
         ...

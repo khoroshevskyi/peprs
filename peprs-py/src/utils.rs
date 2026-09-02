@@ -17,7 +17,7 @@ use pyo3::types::PyList;
 ///
 /// A Python object representing the value.
 ///
-pub fn anyvalue_to_pyobject(py: Python<'_>, value: &AnyValue) -> PyObject {
+pub fn anyvalue_to_pyobject(py: Python<'_>, value: &AnyValue) -> Py<PyAny> {
     match value {
         AnyValue::Null => py.None(),
         AnyValue::Boolean(b) => b.into_pyobject(py).unwrap().to_owned().into_any().unbind(),
@@ -34,7 +34,7 @@ pub fn anyvalue_to_pyobject(py: Python<'_>, value: &AnyValue) -> PyObject {
         AnyValue::String(s) => s.into_pyobject(py).unwrap().into_any().unbind(),
         AnyValue::StringOwned(s) => s.as_str().into_pyobject(py).unwrap().into_any().unbind(),
         AnyValue::List(series) => {
-            let items: Vec<PyObject> = series
+            let items: Vec<Py<PyAny>> = series
                 .iter()
                 .map(|v| anyvalue_to_pyobject(py, &v))
                 .collect();

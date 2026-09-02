@@ -319,11 +319,11 @@ impl PyProject {
         py: Python<'_>,
         raw: Option<bool>,
         by_sample: Option<bool>,
-    ) -> PyResult<HashMap<String, PyObject>> {
+    ) -> PyResult<HashMap<String, Py<PyAny>>> {
         let raw = raw.unwrap_or(false);
         let by_sample = by_sample.unwrap_or(true);
 
-        let mut project_dict: HashMap<String, PyObject> = HashMap::new();
+        let mut project_dict: HashMap<String, Py<PyAny>> = HashMap::new();
 
         if raw == true {
             // --- config ---
@@ -669,7 +669,7 @@ impl PyProject {
     ///
     #[getter]
     pub fn get_config(&self) -> PyResult<Py<PyAny>> {
-        Python::with_gil(|py| match &self.inner.config {
+        Python::attach(|py| match &self.inner.config {
             Some(config) => {
                 let value = config.get_raw_config(None, None);
                 let obj =
@@ -741,7 +741,7 @@ impl PyProject {
     /// sample = project.get_samples("frog_1")
     /// ```
     #[pyo3(signature = (names))]
-    pub fn get_samples(&self, py: Python<'_>, names: PyObject) -> PyResult<Vec<PySample>> {
+    pub fn get_samples(&self, py: Python<'_>, names: Py<PyAny>) -> PyResult<Vec<PySample>> {
         let name_strings: Vec<String> = if let Ok(s) = names.extract::<String>(py) {
             vec![s]
         } else if let Ok(v) = names.extract::<Vec<String>>(py) {
@@ -757,6 +757,49 @@ impl PyProject {
             .get_samples(name_refs)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(samples.iter().map(|s| sample_to_pysample(py, s)).collect())
+    }
+
+    ///
+    /// List the names of amendments defined in the PEP config.
+    ///
+    /// # Returns
+    ///
+    /// The available amendment names.
+    ///
+    /// # Errors
+    ///
+    /// Raises `ValueError` if the PEP defines no amendments.
+    ///
+    pub fn list_amendments(&self) -> Result<Vec<String>, PeprsCoreError> {
+        Ok(self.inner.list_amendments()?)
+    }
+
+    ///
+    /// Activate one or more amendments, reloading the project from its config.
+    ///
+    /// # Arguments
+    ///
+    /// * `amendments` - Amendment names to activate. list or String
+    ///
+    /// # Errors
+    ///
+    /// Raises `ValueError` if the PEP defines no amendments, was not loaded from
+    /// a config file, or names an amendment that does not exist.
+    ///
+    pub fn activate_amendments(&mut self, py: Python<'_>, amendments: Py<PyAny>) -> PyResult<()> {
+        let amendments_list: Vec<String> = if let Ok(s) = amendments.extract::<String>(py) {
+            vec![s]
+        } else if let Ok(v) = amendments.extract::<Vec<String>>(py) {
+            v
+        } else {
+            return Err(PyValueError::new_err(
+                "names must be a string or list of strings",
+            ));
+        };
+        self.inner
+            .activate_amendments(&amendments_list)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(())
     }
 
     ///

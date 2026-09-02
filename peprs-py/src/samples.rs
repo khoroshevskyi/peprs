@@ -9,7 +9,7 @@ use crate::utils::anyvalue_to_pyobject;
 
 /// Convert a peprs-core Sample into a PySample.
 pub fn sample_to_pysample(py: Python, sample: &Sample) -> PySample {
-    let inner: HashMap<String, PyObject> = sample
+    let inner: HashMap<String, Py<PyAny>> = sample
         .iter()
         .map(|(k, v)| (k.clone(), anyvalue_to_pyobject(py, v)))
         .collect();
@@ -21,19 +21,19 @@ pub fn sample_to_pysample(py: Python, sample: &Sample) -> PySample {
 ///
 #[pyclass(name = "Sample")]
 pub struct PySample {
-    inner: HashMap<String, PyObject>,
+    inner: HashMap<String, Py<PyAny>>,
 }
 
 #[pymethods]
 impl PySample {
-    fn __getitem__(&self, py: Python, key: &str) -> PyResult<PyObject> {
+    fn __getitem__(&self, py: Python, key: &str) -> PyResult<Py<PyAny>> {
         self.inner
             .get(key)
             .map(|v| v.clone_ref(py))
             .ok_or_else(|| PyKeyError::new_err(key.to_string()))
     }
 
-    fn __getattr__(&self, py: Python, name: &str) -> PyResult<PyObject> {
+    fn __getattr__(&self, py: Python, name: &str) -> PyResult<Py<PyAny>> {
         self.inner
             .get(name)
             .map(|v| v.clone_ref(py))
@@ -70,11 +70,11 @@ impl PySample {
         self.inner.keys().cloned().collect()
     }
 
-    fn values(&self, py: Python) -> Vec<PyObject> {
+    fn values(&self, py: Python) -> Vec<Py<PyAny>> {
         self.inner.values().map(|v| v.clone_ref(py)).collect()
     }
 
-    fn items(&self, py: Python) -> Vec<(String, PyObject)> {
+    fn items(&self, py: Python) -> Vec<(String, Py<PyAny>)> {
         self.inner
             .iter()
             .map(|(k, v)| (k.clone(), v.clone_ref(py)))
@@ -82,15 +82,15 @@ impl PySample {
     }
 
     #[pyo3(signature = (key, default=None))]
-    fn get(&self, py: Python, key: &str, default: Option<PyObject>) -> PyObject {
+    fn get(&self, py: Python, key: &str, default: Option<Py<PyAny>>) -> Py<PyAny> {
         self.inner
             .get(key)
             .map(|v| v.clone_ref(py))
             .unwrap_or_else(|| default.unwrap_or_else(|| py.None()))
     }
 
-    fn to_dict(&self, py: Python) -> PyResult<PyObject> {
-        let map: HashMap<String, PyObject> = self
+    fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
+        let map: HashMap<String, Py<PyAny>> = self
             .inner
             .iter()
             .map(|(k, v)| (k.clone(), v.clone_ref(py)))

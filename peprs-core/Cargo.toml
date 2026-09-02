@@ -34,7 +34,7 @@ tokio = { version = "1.48.0", features = ["rt", "rt-multi-thread", "macros"], op
 default = ["zip", "csv", "json", "native"]
 csv = ["polars-io/csv", "polars-lazy/csv"]
 json = ["polars-io/json", "polars-lazy/json"]
-native = ["polars/new_streaming", "polars/fmt", "dep:ureq"]
+native = ["polars/streaming", "polars/fmt", "dep:ureq"]
 wdl = ["dep:wdl", "dep:tokio"]
 zip = ["dep:zip"]
 
