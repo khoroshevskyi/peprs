@@ -285,6 +285,17 @@ class Project:
         """
         ...
 
+    def reprocess(self) -> None:
+        """Re-run sample processing from the current in-memory config and tables.
+
+        Recomputes the processed sample table by re-applying the config's sample
+        modifiers and subsample merge to the in-memory raw samples/subsamples.
+        Does **not** read anything from disk.
+
+        :raises ValueError: if the project has no config
+        """
+        ...
+
     def len(self) -> int:
         """Return the number of samples in the project."""
         ...

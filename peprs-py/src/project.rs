@@ -803,6 +803,22 @@ impl PyProject {
     }
 
     ///
+    /// Re-run sample processing from the current in-memory config and raw tables.
+    ///
+    /// Recomputes the processed sample table by re-applying the config's sample
+    /// modifiers and subsample merge to the in-memory raw samples/subsamples.
+    /// Does not read anything from disk.
+    ///
+    /// # Errors
+    ///
+    /// Raises `ValueError` if the project has no config.
+    ///
+    pub fn reprocess(&mut self) -> Result<(), PeprsCoreError> {
+        self.inner.reprocess()?;
+        Ok(())
+    }
+
+    ///
     /// Returns a boolean value if project sample table is the same.
     /// This function DOES NOT check if configs are the same
     ///

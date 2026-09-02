@@ -103,6 +103,54 @@ class TestProjectConstructor:
         assert len(r) > 0
 
 
+class TestReprocess:
+    @pytest.mark.parametrize(
+        "example_pep_cfg_path",
+        ["basic", "append", "imply", "derive", "subtable1"],
+        indirect=True,
+    )
+    def test_reprocess_is_idempotent(self, example_pep_cfg_path):
+        """Verify reprocess() recomputes the same processed sample table."""
+        p = Project(example_pep_cfg_path)
+        before = p.to_polars()
+        p.reprocess()
+        after = p.to_polars()
+        assert before.equals(after)
+        assert len(p) == before.height
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
+    def test_reprocess_preserves_raw(self, example_pep_cfg_path):
+        """Verify reprocess() leaves the raw sample table untouched."""
+        p = Project(example_pep_cfg_path)
+        raw_before = p.to_polars(raw=True)
+        p.reprocess()
+        assert p.to_polars(raw=True).equals(raw_before)
+
+    @pytest.mark.parametrize("example_pep_csv_path", ["basic"], indirect=True)
+    def test_reprocess_on_csv_project(self, example_pep_csv_path):
+        """Verify reprocess() works on a project built from a CSV."""
+        p = Project(example_pep_csv_path)
+        n = len(p)
+        p.reprocess()
+        assert len(p) == n
+
+    @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
+    def test_reprocess_no_disk_read(self, tmp_path, example_pep_cfg_path):
+        """Verify reprocess() uses in-memory data, not the on-disk sample table."""
+        import shutil
+
+        src = os.path.dirname(example_pep_cfg_path)
+        dst = tmp_path / "pep"
+        shutil.copytree(src, dst)
+        p = Project(str(dst / "project_config.yaml"))
+        n = len(p)
+
+        # remove the on-disk sample table; reprocess must not need it
+        os.remove(dst / "sample_table.csv")
+        p.reprocess()  # would fail if it re-read the deleted CSV
+        assert len(p) == n
+
+
 class TestSampleAccess:
     @pytest.mark.parametrize("example_pep_cfg_path", ["basic"], indirect=True)
     def test_get_sample(self, example_pep_cfg_path):
