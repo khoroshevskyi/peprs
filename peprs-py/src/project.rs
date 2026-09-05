@@ -8,7 +8,7 @@ use peprs_core::project::Project;
 use polars::io::SerReader;
 use polars::prelude::JsonReader;
 use polars::prelude::*;
-use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use pyo3::exceptions::{PyDeprecationWarning, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyType};
 use pyo3_polars::PyDataFrame;
@@ -319,11 +319,11 @@ impl PyProject {
         py: Python<'_>,
         raw: Option<bool>,
         by_sample: Option<bool>,
-    ) -> PyResult<HashMap<String, PyObject>> {
+    ) -> PyResult<HashMap<String, Py<PyAny>>> {
         let raw = raw.unwrap_or(false);
         let by_sample = by_sample.unwrap_or(true);
 
-        let mut project_dict: HashMap<String, PyObject> = HashMap::new();
+        let mut project_dict: HashMap<String, Py<PyAny>> = HashMap::new();
 
         if raw == true {
             // --- config ---
@@ -408,7 +408,13 @@ impl PyProject {
     }
 
     ///
-    /// Return the samples as a Pandas DataFrame.
+    /// Return the samples as a Pandas DataFrame indexed by the sample-name column.
+    ///
+    /// The returned frame is indexed by the sample table index column (default
+    /// `sample_name`) *without* dropping it, mirroring `peppy`'s sample table so
+    /// that both `df["<col>"]` (column access) and `df.loc["<sample_name>"]`
+    /// (row lookup by name) work. If the index column is absent, the frame keeps
+    /// its default range index.
     ///
     /// # Arguments
     ///
@@ -422,10 +428,69 @@ impl PyProject {
     pub fn to_pandas(&self, py: Python<'_>, raw: Option<bool>) -> PyResult<Py<PyAny>> {
         // to_pandas method doesn't exist in rust, we need first convert to Python polars object,
         // and then using Python method convert it to Pandas
-        self.to_polars(raw)?
+        let df = self
+            .to_polars(raw)?
             .into_pyobject(py)?
-            .call_method0("to_pandas")
-            .map(|b| b.unbind())
+            .call_method0("to_pandas")?;
+        set_pandas_index(
+            py,
+            &df,
+            std::slice::from_ref(&self.inner.sample_table_index),
+        )?;
+        Ok(df.unbind())
+    }
+
+    ///
+    /// Deprecated `peppy`-compatible alias for [`to_pandas`](Self::to_pandas).
+    ///
+    /// Returns the processed sample table as a Pandas DataFrame indexed by the
+    /// sample-name column. Kept only for backwards compatibility with workflows
+    /// written against `peppy.Project.sample_table`.
+    ///
+    /// **Deprecated:** emits a `DeprecationWarning` and will be removed in a
+    /// future release. Use [`to_pandas`](Self::to_pandas) (or
+    /// [`to_polars`](Self::to_polars)) instead.
+    ///
+    /// # Returns
+    ///
+    /// A Pandas `DataFrame`.
+    ///
+    #[getter]
+    pub fn get_sample_table(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        warn_deprecated(
+            py,
+            "Project.sample_table is deprecated and will be removed in a future release; \
+             use Project.to_pandas() instead.",
+        )?;
+        self.to_pandas(py, Some(false))
+    }
+
+    ///
+    /// Return the project's flat subsample table as a Polars DataFrame.
+    ///
+    /// Concatenates the project's subsample tables (one per `subsample_table`
+    /// entry in the config) vertically into a single frame. Returns `None` if
+    /// the project defines no subsamples.
+    ///
+    /// # Returns
+    ///
+    /// A Polars `DataFrame`, or `None` if the project defines no subsamples.
+    ///
+    #[getter]
+    pub fn get_subsample_table(&self) -> PyResult<Option<PyDataFrame>> {
+        let dfs = match &self.inner.subsamples {
+            Some(dfs) if !dfs.is_empty() => dfs,
+            _ => return Ok(None),
+        };
+
+        let mut combined = dfs[0].clone();
+        for df in &dfs[1..] {
+            combined
+                .vstack_mut(df)
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        }
+
+        Ok(Some(PyDataFrame(combined)))
     }
 
     ///
@@ -604,7 +669,7 @@ impl PyProject {
     ///
     #[getter]
     pub fn get_config(&self) -> PyResult<Py<PyAny>> {
-        Python::with_gil(|py| match &self.inner.config {
+        Python::attach(|py| match &self.inner.config {
             Some(config) => {
                 let value = config.get_raw_config(None, None);
                 let obj =
@@ -676,7 +741,7 @@ impl PyProject {
     /// sample = project.get_samples("frog_1")
     /// ```
     #[pyo3(signature = (names))]
-    pub fn get_samples(&self, py: Python<'_>, names: PyObject) -> PyResult<Vec<PySample>> {
+    pub fn get_samples(&self, py: Python<'_>, names: Py<PyAny>) -> PyResult<Vec<PySample>> {
         let name_strings: Vec<String> = if let Ok(s) = names.extract::<String>(py) {
             vec![s]
         } else if let Ok(v) = names.extract::<Vec<String>>(py) {
@@ -692,6 +757,65 @@ impl PyProject {
             .get_samples(name_refs)
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
         Ok(samples.iter().map(|s| sample_to_pysample(py, s)).collect())
+    }
+
+    ///
+    /// List the names of amendments defined in the PEP config.
+    ///
+    /// # Returns
+    ///
+    /// The available amendment names.
+    ///
+    /// # Errors
+    ///
+    /// Raises `ValueError` if the PEP defines no amendments.
+    ///
+    pub fn list_amendments(&self) -> Result<Vec<String>, PeprsCoreError> {
+        Ok(self.inner.list_amendments()?)
+    }
+
+    ///
+    /// Activate one or more amendments, reloading the project from its config.
+    ///
+    /// # Arguments
+    ///
+    /// * `amendments` - Amendment names to activate. list or String
+    ///
+    /// # Errors
+    ///
+    /// Raises `ValueError` if the PEP defines no amendments, was not loaded from
+    /// a config file, or names an amendment that does not exist.
+    ///
+    pub fn activate_amendments(&mut self, py: Python<'_>, amendments: Py<PyAny>) -> PyResult<()> {
+        let amendments_list: Vec<String> = if let Ok(s) = amendments.extract::<String>(py) {
+            vec![s]
+        } else if let Ok(v) = amendments.extract::<Vec<String>>(py) {
+            v
+        } else {
+            return Err(PyValueError::new_err(
+                "names must be a string or list of strings",
+            ));
+        };
+        self.inner
+            .activate_amendments(&amendments_list)
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(())
+    }
+
+    ///
+    /// Re-run sample processing from the current in-memory config and raw tables.
+    ///
+    /// Recomputes the processed sample table by re-applying the config's sample
+    /// modifiers and subsample merge to the in-memory raw samples/subsamples.
+    /// Does not read anything from disk.
+    ///
+    /// # Errors
+    ///
+    /// Raises `ValueError` if the project has no config.
+    ///
+    pub fn reprocess(&mut self) -> Result<(), PeprsCoreError> {
+        self.inner.reprocess()?;
+        Ok(())
     }
 
     ///
@@ -719,4 +843,42 @@ impl PyProject {
     fn len(&self) -> PyResult<usize> {
         Ok(self.inner.len())
     }
+}
+
+///
+/// Emit a Python `DeprecationWarning` with the given message.
+///
+/// Used by the `peppy`-compatibility accessors (`sample_table`,
+/// `subsample_table`) to steer callers toward the native `to_pandas` /
+/// `to_polars` API before those accessors are removed.
+///
+fn warn_deprecated(py: Python<'_>, message: &str) -> PyResult<()> {
+    let warnings = py.import("warnings")?;
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("category", py.get_type::<PyDeprecationWarning>())?;
+    kwargs.set_item("stacklevel", 2)?;
+    warnings.call_method("warn", (message,), Some(&kwargs))?;
+    Ok(())
+}
+
+///
+/// Set `columns` as the index of a Pandas DataFrame, in place, keeping the
+/// column(s) in the frame (peppy-compatible layout, i.e. `drop=False`).
+///
+/// This is a no-op unless every requested column is present in the frame, so it
+/// safely degrades to the frame's default range index for tables that lack the
+/// sample/subsample name column.
+///
+fn set_pandas_index(py: Python<'_>, df: &Bound<'_, PyAny>, columns: &[String]) -> PyResult<()> {
+    if columns.is_empty() {
+        return Ok(());
+    }
+    let existing: Vec<String> = df.getattr("columns")?.call_method0("tolist")?.extract()?;
+    if columns.iter().all(|c| existing.contains(c)) {
+        let kwargs = PyDict::new(py);
+        kwargs.set_item("drop", false)?;
+        kwargs.set_item("inplace", true)?;
+        df.call_method("set_index", (columns.to_vec(),), Some(&kwargs))?;
+    }
+    Ok(())
 }

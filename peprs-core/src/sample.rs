@@ -27,7 +27,7 @@ impl<'a> Sample<'a> {
     pub fn from_dataframe_row(df: &'a DataFrame, row_index: usize) -> PolarsResult<Self> {
         let mut sample = HashMap::new();
 
-        for (col_name, series) in df.get_columns().iter().enumerate() {
+        for (col_name, series) in df.columns().iter().enumerate() {
             let column_name = df.get_column_names()[col_name].to_string();
             let value = series.get(row_index)?;
             sample.insert(column_name, value);
@@ -60,7 +60,7 @@ impl<'a> Sample<'a> {
 
         let mut sample = HashMap::new();
 
-        for (col_idx, series) in df.get_columns().iter().enumerate() {
+        for (col_idx, series) in df.columns().iter().enumerate() {
             let column_name = df.get_column_names()[col_idx].to_string();
 
             let values: Vec<AnyValue> = row_indexs
@@ -158,7 +158,7 @@ impl<'a> Iterator for SamplesIter<'a> {
         let mut attributes = HashMap::new();
 
         // iterate over the columns of the dataframe
-        for (i, series) in self.df.get_columns().iter().enumerate() {
+        for (i, series) in self.df.columns().iter().enumerate() {
             // we can safely unwrap here because we've already checked the row_index bounds.
             let value = series.get(self.row_index).unwrap();
             // use the cached column name, cloning it for insertion.

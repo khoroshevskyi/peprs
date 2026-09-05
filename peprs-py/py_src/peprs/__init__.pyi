@@ -84,6 +84,24 @@ class Project:
     samples: SamplesIter
     """Iterator over processed samples. Each element is a ``Sample`` object."""
 
+    sample_table: PandasDataFrame
+    """Deprecated ``peppy``-compatible alias for :meth:`to_pandas`.
+
+    Processed sample table as a Pandas DataFrame indexed by the sample-name
+    column (default ``sample_name``), kept as a column too, so both
+    ``pep.sample_table["<col>"]`` and ``pep.sample_table.loc["<sample_name>"]``
+    behave as under peppy.
+
+    .. deprecated::
+        Accessing this property emits a ``DeprecationWarning`` and it will be
+        removed in a future release. Use :meth:`to_pandas` instead.
+    """
+
+    subsample_table: Optional[PolarsDataFrame]
+    """Flat subsample table as a Polars DataFrame, formed by concatenating the
+    project's subsample tables vertically, or ``None`` if the project defines no
+    subsamples."""
+
     def __init__(
         self,
         path: str,
@@ -180,7 +198,12 @@ class Project:
         ...
 
     def to_pandas(self, raw: bool = False) -> PandasDataFrame:
-        """Return the samples as a Pandas DataFrame.
+        """Return the samples as a Pandas DataFrame indexed by the sample-name column.
+
+        The frame is indexed by the sample table index column (default
+        ``sample_name``) without dropping it, mirroring peppy's sample table so
+        that both ``df["<col>"]`` and ``df.loc["<sample_name>"]`` work. If the
+        index column is absent, the frame keeps its default range index.
 
         :param raw: if True, return raw (unprocessed) samples; otherwise processed
         :return: Pandas DataFrame of samples
@@ -243,6 +266,33 @@ class Project:
         :param names: a single sample name, or a list of sample names
         :return: list of Sample objects for the matching samples. Names not
             found in the sample table are silently skipped.
+        """
+        ...
+
+    def list_amendments(self) -> List[str]:
+        """Return the names of amendments defined in the PEP config.
+
+        :raises ValueError: if the PEP defines no amendments
+        """
+        ...
+
+    def activate_amendments(self, amendments: List[str]) -> None:
+        """Activate one or more amendments, reloading the project from its config.
+
+        :param amendments: amendment names to activate
+        :raises ValueError: if the PEP defines no amendments, was not loaded
+            from a config file, or names an amendment that does not exist
+        """
+        ...
+
+    def reprocess(self) -> None:
+        """Re-run sample processing from the current in-memory config and tables.
+
+        Recomputes the processed sample table by re-applying the config's sample
+        modifiers and subsample merge to the in-memory raw samples/subsamples.
+        Does **not** read anything from disk.
+
+        :raises ValueError: if the project has no config
         """
         ...
 

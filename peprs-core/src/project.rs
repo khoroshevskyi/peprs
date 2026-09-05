@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::{BufReader, Write};
 use std::path::{Path, PathBuf};
 
+use polars::polars_utils::pl_path::PlRefPath;
 use polars::prelude::*;
 use serde_json;
 use serde_yaml;
@@ -60,6 +61,9 @@ pub struct Project {
     pub subsamples: Option<Vec<DataFrame>>,
     pub sample_table_index: String,
     pub subsample_table_index: Option<Vec<String>>,
+
+    /// Source config path, retained so amendments can be activated by rebuilding.
+    pub config_path: Option<PathBuf>,
 }
 
 impl PartialEq for Project {
@@ -148,7 +152,10 @@ impl ProjectBuilder {
                     final_config.subsample_table_index = Some(sub_idx);
                 }
 
-                Project::new_from_parsed_config(final_config, config_dir)
+                let mut project = Project::new_from_parsed_config(final_config, config_dir)?;
+                // retain the config path so amendments can be (re)activated later
+                project.config_path = Some(path);
+                Ok(project)
             }
             ProjectSource::CSV(csv) => {
                 let final_index = self
@@ -198,6 +205,7 @@ impl ProjectBuilder {
                     subsamples: None,
                     sample_table_index: index,
                     subsample_table_index: None,
+                    config_path: None,
                 })
             }
             ProjectSource::InMemory {
@@ -415,7 +423,7 @@ impl Project {
     /// `true` if the project has zero samples.
     ///
     pub fn is_empty(&self) -> bool {
-        self.samples.is_empty()
+        self.samples.height() == 0
     }
 
     ///
@@ -446,7 +454,7 @@ impl Project {
             .equal(name)?;
 
         let idx: Vec<usize> = mask
-            .into_iter()
+            .iter()
             .enumerate()
             .filter_map(|(i, v)| (v == Some(true)).then_some(i))
             .collect();
@@ -514,6 +522,62 @@ impl Project {
         let parent_dir = path.parent().unwrap_or_else(|| Path::new(""));
 
         Self::parse_and_apply_project_modifiers(config, parent_dir, amendments)
+    }
+
+    ///
+    /// List the names of amendments defined under `project_modifiers.amend` in
+    /// the project's config.
+    ///
+    /// # Returns
+    ///
+    /// The available amendment names.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Config`] if the project defines no amendments.
+    ///
+    pub fn list_amendments(&self) -> Result<Vec<String>, Error> {
+        let names: Vec<String> = self
+            .config
+            .as_ref()
+            .and_then(|c| c.raw.as_ref())
+            .and_then(|raw| raw.get("project_modifiers"))
+            .and_then(|pm| pm.get("amend"))
+            .and_then(|amend| amend.as_object())
+            .map(|obj| obj.keys().cloned().collect())
+            .unwrap_or_default();
+
+        if names.is_empty() {
+            return Err(Error::config("This PEP does not define any amendments."));
+        }
+        Ok(names)
+    }
+
+    ///
+    /// Activate one or more amendments, reloading the project from its config file.
+    ///
+    /// # Arguments
+    ///
+    /// * `amendments` - Amendment names to activate.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Config`] if the project defines no amendments or was not
+    /// loaded from a config file, or [`Error::AmendmentNotFound`] if a requested
+    /// amendment does not exist.
+    ///
+    pub fn activate_amendments(&mut self, amendments: &[String]) -> Result<(), Error> {
+        // surface a clear error rather than silently ignoring unknown amendments
+        self.list_amendments()?;
+
+        let path = self.config_path.clone().ok_or_else(|| {
+            Error::config("Amendments can only be activated for PEPs loaded from a config file.")
+        })?;
+
+        *self = Project::from_config(&path)
+            .with_amendments(amendments)
+            .build()?;
+        Ok(())
     }
 
     ///
@@ -828,7 +892,7 @@ impl Project {
         let samples_df_raw = match &config.sample_table {
             Some(sample_table) => {
                 let sample_table_path = config_dir.as_ref().join(sample_table);
-                LazyCsvReader::new(PlPath::new(sample_table_path.to_str().unwrap()))
+                LazyCsvReader::new(PlRefPath::new(sample_table_path.to_str().unwrap()))
                     .with_has_header(true)
                     .with_infer_schema_length(Some(10_000))
                     .finish()?
@@ -849,7 +913,7 @@ impl Project {
                     .into_iter()
                     .map(|sub| {
                         let sub_path = config_dir.as_ref().join(sub);
-                        LazyCsvReader::new(PlPath::new(sub_path.to_str().unwrap()))
+                        LazyCsvReader::new(PlRefPath::new(sub_path.to_str().unwrap()))
                             .with_has_header(true)
                             .with_infer_schema_length(Some(10_000))
                             .finish()
@@ -884,8 +948,8 @@ impl Project {
     ) -> Result<Self, Error> {
         let sample_table_index = config
             .sample_table_index
-            .as_deref()
-            .unwrap_or(DEFAULT_SAMPLE_TABLE_INDEX);
+            .clone()
+            .unwrap_or_else(|| DEFAULT_SAMPLE_TABLE_INDEX.to_string());
 
         let subsample_indexes: Option<Vec<String>> = match subsamples {
             Some(_) => Some(
@@ -897,7 +961,51 @@ impl Project {
             _ => None,
         };
 
-        let mut samples_lf = Some(samples_df_raw.clone().lazy());
+        let samples = Self::compute_processed_samples(
+            &config,
+            &samples_df_raw,
+            subsamples.as_ref(),
+            &sample_table_index,
+        )?;
+
+        Ok(Self {
+            sample_table_index,
+            config: Some(config),
+            samples,
+            samples_raw: samples_df_raw,
+            subsamples,
+            subsample_table_index: subsample_indexes,
+            config_path: None,
+        })
+    }
+
+    ///
+    /// Apply the config's sample modifiers and subsample merge to a raw sample
+    /// table, producing the processed sample table.
+    ///
+    /// This is the shared processing pipeline used both when a project is first
+    /// built and when it is [reprocessed](Self::reprocess). It operates purely on
+    /// the in-memory arguments and never reads from disk.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The project configuration whose modifiers are applied.
+    /// * `samples_df_raw` - The raw (unprocessed) sample table.
+    /// * `subsamples` - Optional subsample tables to merge.
+    /// * `sample_table_index` - Name of the sample index column.
+    ///
+    /// # Returns
+    ///
+    /// The processed sample table as a `DataFrame`.
+    ///
+    fn compute_processed_samples(
+        config: &ProjectConfig,
+        samples_df_raw: &DataFrame,
+        subsamples: Option<&Vec<DataFrame>>,
+        sample_table_index: &str,
+    ) -> Result<DataFrame, Error> {
+        let base: DataFrame = samples_df_raw.clone();
+        let mut samples_lf = Some(base.lazy());
 
         // apply modifiers if they exist and if there is a sample table
         #[allow(clippy::collapsible_if)]
@@ -975,7 +1083,7 @@ impl Project {
 
         // merge subsamples after modifiers: aggregate each subsample table by index,
         // then left-join onto samples. Subsample columns become list-typed.
-        if let Some(ref sub_dfs) = subsamples {
+        if let Some(sub_dfs) = subsamples {
             if let Some(lf) = samples_lf.take() {
                 samples_lf = Some(Self::merge_subsamples(lf, sub_dfs, sample_table_index)?);
             }
@@ -993,39 +1101,87 @@ impl Project {
 
         // finally, collect the lazy frame
         let samples = match samples_lf {
-            Some(lf) => Some(lf.collect()?),
-            None => None,
+            Some(lf) => lf.collect()?,
+            None => DataFrame::empty(),
         };
 
         // check sample_table_index column exists and for duplicates (after modifiers,
         // since sample_table_index column may be created by append/derive)
-        if let Some(ref final_df) = samples {
-            if final_df.height() > 0 {
-                let sample_col = final_df.column(sample_table_index).map_err(|_| {
-                    Error::config(format!(
-                        "Sample table index column '{}' not found after applying modifiers. \
-                         Ensure the column exists in the sample table or is created by sample_modifiers.",
-                        sample_table_index
-                    ))
-                })?;
-                let has_duplicates = sample_col.n_unique()? < sample_col.len();
-                if has_duplicates {
-                    warn!(
-                        "Sample table contains duplicated samples, bugs can appear. \
-                         We strongly encourage using subsample tables!"
-                    );
-                }
+        if samples.height() > 0 {
+            let sample_col = samples.column(sample_table_index).map_err(|_| {
+                Error::config(format!(
+                    "Sample table index column '{}' not found after applying modifiers. \
+                     Ensure the column exists in the sample table or is created by sample_modifiers.",
+                    sample_table_index
+                ))
+            })?;
+            let has_duplicates = sample_col.n_unique()? < sample_col.len();
+            if has_duplicates {
+                warn!(
+                    "Sample table contains duplicated samples, bugs can appear. \
+                     We strongly encourage using subsample tables!"
+                );
             }
         }
 
-        Ok(Self {
-            sample_table_index: sample_table_index.to_owned(),
-            config: Some(config),
-            samples: samples.unwrap_or(DataFrame::empty()),
-            samples_raw: samples_df_raw,
-            subsamples,
-            subsample_table_index: subsample_indexes,
-        })
+        Ok(samples)
+    }
+
+    ///
+    /// Re-run the sample-processing pipeline using the current in-memory config
+    /// and raw sample/subsample tables, without reading anything from disk.
+    ///
+    /// Recomputes [`samples`](Self::samples) from [`samples_raw`](Self::samples_raw)
+    /// and [`subsamples`](Self::subsamples) by re-applying the config's sample
+    /// modifiers and subsample merge. Use this after changing the in-memory
+    /// config so the processed sample table reflects the changes.
+    ///
+    /// Note: this does not re-apply project modifiers (imports/amendments), which
+    /// require disk access and are already baked into the loaded config.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` on success, or an error if the config is missing or processing
+    /// fails.
+    ///
+    pub fn reprocess(&mut self) -> Result<(), Error> {
+        let (sample_table_index, subsample_index, samples) = {
+            let config = self
+                .config
+                .as_ref()
+                .ok_or_else(|| Error::config("Cannot reprocess a project without a config."))?;
+
+            let sample_table_index = config
+                .sample_table_index
+                .clone()
+                .unwrap_or_else(|| DEFAULT_SAMPLE_TABLE_INDEX.to_string());
+
+            let samples = Self::compute_processed_samples(
+                config,
+                &self.samples_raw,
+                self.subsamples.as_ref(),
+                &sample_table_index,
+            )?;
+
+            let subsample_index = if self.subsamples.is_some() {
+                Some(
+                    config
+                        .subsample_table_index
+                        .clone()
+                        .unwrap_or(vec![DEFAULT_SUBSAMPLE_TABLE_INDEX.to_string()]),
+                )
+            } else {
+                None
+            };
+
+            (sample_table_index, subsample_index, samples)
+        };
+
+        self.samples = samples;
+        self.sample_table_index = sample_table_index;
+        self.subsample_table_index = subsample_index;
+
+        Ok(())
     }
 
     ///
@@ -1158,7 +1314,13 @@ impl Project {
                 let mut work = result.with_row_index(row_idx, None);
 
                 let explode_names: Vec<&str> = list_cols.iter().map(|c| c.as_str()).collect();
-                work = work.explode(cols(explode_names));
+                work = work.explode(
+                    cols(explode_names),
+                    ExplodeOptions {
+                        empty_as_null: true,
+                        keep_nulls: true,
+                    },
+                );
                 work = work.with_column(final_expr.alias(col_to_derive));
 
                 // re-aggregate: implode exploded + derived cols, first() for the rest
@@ -1383,7 +1545,8 @@ mod tests {
             .unwrap()
             .str()
             .unwrap()
-            .into_no_null_iter()
+            .iter()
+            .flatten()
             .map(|s| s.to_string())
             .collect();
 
@@ -1471,7 +1634,8 @@ mod tests {
             .unwrap()
             .str()
             .unwrap()
-            .into_no_null_iter()
+            .iter()
+            .flatten()
             .collect::<Vec<_>>();
         assert_eq!(protocol_values, correct_vals);
     }
@@ -1481,7 +1645,7 @@ mod tests {
         let proj = Project::from_config(import_pep).build();
         assert_eq!(proj.is_ok(), true);
         assert_eq!(
-            proj.unwrap().samples.get_column_names_str(),
+            proj.unwrap().samples.get_column_names(),
             vec!["sample_name", "protocol", "file", "imported_attr"]
         );
     }
@@ -1501,7 +1665,8 @@ mod tests {
             .unwrap()
             .str()
             .unwrap()
-            .into_no_null_iter()
+            .iter()
+            .flatten()
             .collect::<Vec<_>>();
         assert_eq!(protocol_values, correct_vals);
 
@@ -1518,9 +1683,101 @@ mod tests {
             .unwrap()
             .str()
             .unwrap()
-            .into_no_null_iter()
+            .iter()
+            .flatten()
             .collect::<Vec<_>>();
         assert_eq!(protocol_values, correct_vals);
+    }
+
+    #[rstest]
+    fn activate_amendments_at_runtime(amendments1_pep: &'static str, basic_pep: &'static str) {
+        // build base project (no amendment active)
+        let mut proj = Project::from_config(amendments1_pep).build().unwrap();
+
+        // available amendments are discoverable at runtime
+        let mut names = proj.list_amendments().unwrap();
+        names.sort();
+        assert_eq!(names, vec!["newLib".to_string(), "newLib2".to_string()]);
+
+        let protocol = |p: &Project| {
+            p.samples
+                .column("protocol")
+                .unwrap()
+                .str()
+                .unwrap()
+                .iter()
+                .flatten()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(protocol(&proj), vec!["RRBS"; 4]);
+
+        // activate an amendment in place; the project is reloaded from disk
+        proj.activate_amendments(&["newLib".to_string()]).unwrap();
+        assert_eq!(protocol(&proj), vec!["ABCD"; 4]);
+        // config_path is retained across activation, so it can be repeated
+        proj.activate_amendments(&["newLib2".to_string()]).unwrap();
+        assert_eq!(protocol(&proj), vec!["EFGH"; 4]);
+
+        // a PEP without amendments returns a clear error instead of a silent no-op
+        let mut plain = Project::from_config(basic_pep).build().unwrap();
+        assert!(plain.list_amendments().is_err());
+        assert!(
+            plain
+                .activate_amendments(&["whatever".to_string()])
+                .is_err()
+        );
+    }
+
+    #[rstest]
+    fn reprocess_applies_config_change(basic_pep: &'static str) {
+        use crate::config::SampleModifiers;
+        use std::collections::HashMap;
+
+        let mut proj = Project::from_config(basic_pep).build().unwrap();
+        // basic pep has no `read_type` column before any modifier is applied
+        assert!(proj.samples.column("read_type").is_err());
+
+        // add an APPEND modifier to the in-memory config, then reprocess
+        let mut append = HashMap::new();
+        append.insert("read_type".to_string(), "SINGLE".to_string());
+        proj.config.as_mut().unwrap().sample_modifiers = Some(SampleModifiers {
+            remove: None,
+            append: Some(append),
+            duplicate: None,
+            imply: None,
+            derive: None,
+        });
+
+        proj.reprocess().unwrap();
+
+        // the new column is now present with the appended value on every row
+        let read_type: Vec<String> = proj
+            .samples
+            .column("read_type")
+            .unwrap()
+            .str()
+            .unwrap()
+            .iter()
+            .flatten()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(read_type, vec!["SINGLE"; proj.len()]);
+
+        // reprocess is idempotent: running again keeps the same result
+        proj.reprocess().unwrap();
+        assert_eq!(proj.samples.column("read_type").unwrap().len(), proj.len());
+    }
+
+    #[rstest]
+    fn reprocess_preserves_raw_samples(basic_pep: &'static str) {
+        let mut proj = Project::from_config(basic_pep).build().unwrap();
+        let raw_before = proj.samples_raw.clone();
+        proj.reprocess().unwrap();
+        // reprocessing recomputes `samples` from `samples_raw` and leaves the raw
+        // table untouched
+        assert!(proj.samples_raw.equals(&raw_before));
+        assert_eq!(proj.len(), 2);
     }
 
     #[rstest]
@@ -1711,7 +1968,8 @@ mod tests {
         let frog1_vals: Vec<String> = frog1
             .str()
             .unwrap()
-            .into_no_null_iter()
+            .iter()
+            .flatten()
             .map(|s| s.to_string())
             .collect();
         assert_eq!(
@@ -1759,7 +2017,8 @@ mod tests {
         let frog1_vals: Vec<String> = frog1
             .str()
             .unwrap()
-            .into_no_null_iter()
+            .iter()
+            .flatten()
             .map(|s| s.to_string())
             .collect();
         assert_eq!(

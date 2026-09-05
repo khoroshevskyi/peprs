@@ -5,6 +5,7 @@ use std::sync::LazyLock;
 
 use crate::config::ProjectConfig;
 use crate::error::Error;
+use polars::polars_utils::pl_path::PlRefPath;
 use polars::prelude::*;
 use regex::Regex;
 use serde_json::Value;
@@ -135,7 +136,7 @@ pub fn resolve_yaml_to_dataframe(path: &Path) -> Result<DataFrame, Error> {
 /// Resolve a CSV path: try local file first, then fetch as URL via ureq.
 pub fn resolve_csv_to_dataframe(path: &Path) -> Result<DataFrame, Error> {
     if path.exists() {
-        let df = LazyCsvReader::new(PlPath::new(path.to_str().unwrap()))
+        let df = LazyCsvReader::new(PlRefPath::new(path.to_str().unwrap()))
             .with_has_header(true)
             .with_infer_schema_length(Some(10_000))
             .finish()?
